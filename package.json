@@ -1,0 +1,18 @@
+{
+  "name": "projector-bible",
+  "version": "0.1.0",
+  "description": "AI-powered Scripture Projection Assistant: listens to a sermon, detects Bible references, and lets an operator approve verses for projector display.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@deepgram/sdk": "^5.6.0",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2",
+    "multer": "^2.2.0",
+    "sanitize-html": "^2.17.6",
+    "ws": "^8.18.0"
+  }
+}

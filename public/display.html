@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Projector Display — Projector Bible</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  html, body {
+    margin: 0; height: 100%; color: #fff;
+    font-family: Georgia, "Times New Roman", serif;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    position: relative;
+    background: #000000;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    transition: background-color 0.8s ease;
+  }
+  #bgVideo {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; z-index: 0; display: none;
+  }
+  #stage {
+    position: relative;
+    z-index: 1;
+    width: 90vw;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  #stage.visible { opacity: 1; }
+  #panel {
+    display: inline-block;
+    max-width: 100%;
+    padding: 44px 64px;
+  }
+  #verseText {
+    font-size: clamp(28px, 5vw, 72px);
+    line-height: 1.35;
+    font-weight: 500;
+    white-space: pre-line;
+    /* Subtitle-style outline via layered shadows, not -webkit-text-stroke —
+       text-stroke silently suppresses <u> underline rendering in Chrome. */
+    text-shadow:
+      -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000,
+      -2px 0 0 #000, 2px 0 0 #000, 0 -2px 0 #000, 0 2px 0 #000,
+      0 0 14px rgba(0, 0, 0, 0.85), 0 0 28px rgba(0, 0, 0, 0.6);
+  }
+  #verseText.size-small { font-size: clamp(20px, 3.5vw, 48px); }
+  #verseText.size-normal { font-size: clamp(28px, 5vw, 72px); }
+  #verseText.size-large { font-size: clamp(36px, 6.5vw, 96px); }
+  #verseText.size-xlarge { font-size: clamp(44px, 8vw, 120px); }
+  #verseRef {
+    margin-top: 28px;
+    font-size: clamp(18px, 2.4vw, 34px);
+    color: #d8b25c;
+    letter-spacing: 0.03em;
+    text-shadow:
+      -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000,
+      0 0 8px rgba(0, 0, 0, 0.85);
+  }
+</style>
+</head>
+<body>
+  <video id="bgVideo" muted loop playsinline></video>
+  <div id="stage">
+    <div id="panel">
+      <div id="verseText"></div>
+      <div id="verseRef"></div>
+    </div>
+  </div>
+  <script src="display.js"></script>
+</body>
+</html>
