@@ -113,6 +113,18 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   browser's built-in `speechSynthesis` API — useful for proofreading an
   announcement before projecting it. Click again (now "⏹ Stop") to cancel
   mid-sentence.
+- **Installable (PWA)**: [`public/sw.js`](public/sw.js) is a minimal
+  service worker (caches the static app shell only — API calls, uploads,
+  and motion backgrounds always hit the network, so nothing here can ever
+  go stale) that, combined with a manifest, makes Chrome treat this as an
+  installable app. Operator and Display each get their **own** manifest
+  (`manifest-operator.json` / `manifest-display.json`) with their own
+  start page, since they're typically installed on different machines —
+  the operator console gets a visible **📲 Install App** button in the
+  header once Chrome decides the page qualifies; the display page relies
+  on Chrome's own address-bar install icon instead, since nothing should
+  ever appear as UI chrome on what's actually being projected. Icons live
+  in `public/icons/`.
 
 ## Setup
 

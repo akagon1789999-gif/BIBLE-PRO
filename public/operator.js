@@ -25,6 +25,7 @@
   const speakBtn = document.getElementById("speakBtn");
   const modeManualBtn = document.getElementById("modeManualBtn");
   const modeAutoBtn = document.getElementById("modeAutoBtn");
+  const installBtn = document.getElementById("installBtn");
 
   let ws = null;
   let mediaStream = null;
@@ -452,6 +453,29 @@
       bgFileInput.value = "";
     }
   };
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch((err) => console.error("SW registration failed:", err));
+    });
+  }
+
+  let deferredInstallPrompt = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    installBtn.style.display = "inline-block";
+  });
+  installBtn.onclick = async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    installBtn.style.display = "none";
+  };
+  window.addEventListener("appinstalled", () => {
+    installBtn.style.display = "none";
+  });
 
   loadTranslations();
   loadBackgroundPresets();
