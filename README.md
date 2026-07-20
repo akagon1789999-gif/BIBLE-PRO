@@ -31,11 +31,22 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   Deepgram API key lives only in `.env` on the server — it's never sent to
   the browser.
 - **Offline fallback** ([`lib/offlineWhisper.js`](lib/offlineWhisper.js)):
-  if Deepgram can't be reached — connection drops mid-service, or fails to
-  start — the server automatically switches to a local `whisper.cpp` model
-  (via the optional `nodejs-whisper` package) and tells the operator's
-  browser to start sending it audio instead. It retries Deepgram every 20s
-  in the background and switches back the moment it reconnects.
+  if Deepgram can't be reached — connection drops mid-service, fails to
+  start, or the internet is just gone — the server automatically switches
+  to a local `whisper.cpp` model (via the optional `nodejs-whisper`
+  package) and tells the operator's browser to start sending it audio
+  instead. It retries every 20s in the background and switches back the
+  moment Deepgram reconnects.
+  - **Detection is active, not just reactive**: waiting on Deepgram's SDK
+    to report a closed/errored connection isn't enough on its own — an
+    already-open TCP connection doesn't necessarily notice a dead network
+    right away (flipping off Wi-Fi doesn't error an idle socket
+    immediately; the OS can take a long time to notice). So on top of
+    reacting to Deepgram closing, the server also independently probes
+    `api.deepgram.com` every 20s while "online" and forces the switch the
+    moment that probe fails — this is what actually catches a real Wi-Fi
+    drop promptly instead of possibly sitting there for a long time
+    waiting for Deepgram's socket to notice on its own.
   - **One-time setup, while online**: `npm run setup:offline-stt` downloads
     the model and compiles `whisper.cpp` — this can't happen automatically
     later, since it needs internet the model won't have once it's actually
@@ -53,7 +64,13 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
     and sends ~5-second segments to the server, which feeds them straight
     into whisper.cpp and then through the *exact same* reference-detection
     pipeline Deepgram's output uses — Auto/Manual mode, sermon logging, all
-    of it, unchanged.
+    of it, unchanged. That `AudioContext` is explicitly `.resume()`d after
+    creation — Chrome can create one in a suspended state when it's
+    instantiated outside a direct click handler (ours is created later,
+    asynchronously, once the server reports a problem), and a suspended
+    context silently never produces audio: no errors anywhere, it just
+    quietly does nothing, which was the cause of an early bug here where
+    offline mode never actually transcribed anything.
   - **Honest limitations**: this is a fallback, not a Deepgram replacement.
     Each ~5s segment is transcribed independently (no cross-chunk context,
     so sentences can get cut awkwardly at boundaries), there are no interim
@@ -209,8 +226,9 @@ Then open, on the same laptop:
    Display** to send one to the screen, or **Reject** to dismiss it. In
    Auto, detected verses go straight to the screen with no card and no
    click needed. If the internet drops, a **📡 Offline mode** badge appears
-   next to the header and everything keeps working via the local speech
-   engine (see Offline fallback above) — no action needed from you.
+   next to the header within about 20 seconds and everything keeps working
+   via the local speech engine (see Offline fallback above) — no action
+   needed from you.
 5. Use the **Clear Display** button to blank the screen between verses.
 6. If a reference is missed or misheard, type it directly into the manual
    box (e.g. `John 3:16`) and click **Show** — it goes straight to the

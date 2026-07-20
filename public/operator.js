@@ -264,6 +264,14 @@
     offlineProcessor.connect(offlineSilentGain);
     offlineSilentGain.connect(offlineAudioContext.destination);
 
+    // Chrome can create an AudioContext in "suspended" state when it's not
+    // instantiated directly inside a click handler (ours is created later,
+    // async, after a server message) — without resume() it silently never
+    // produces audio: no errors anywhere, onaudioprocess just never fires.
+    if (offlineAudioContext.state === "suspended") {
+      offlineAudioContext.resume().catch((err) => console.error("Failed to resume offline AudioContext:", err));
+    }
+
     offlineFlushTimer = setInterval(flushOfflineSegment, OFFLINE_SEGMENT_MS);
   }
 

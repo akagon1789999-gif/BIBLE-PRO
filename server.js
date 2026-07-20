@@ -28,7 +28,9 @@ const {
 const PORT = process.env.PORT || 3000;
 const TRANSLATION = process.env.TRANSLATION || "KJV";
 const SUGGESTION_DEDUPE_MS = 20 * 1000;
-const DEEPGRAM_RECONNECT_INTERVAL_MS = 20 * 1000;
+// Used both for the "are we still online?" probe while connected, and for
+// reconnect attempts while in offline fallback.
+const HEALTH_CHECK_INTERVAL_MS = 20 * 1000;
 
 const uploadsDir = path.join(__dirname, "public", "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
@@ -220,6 +222,59 @@ async function tryConnectDeepgram(ws, state) {
   }
 }
 
+// Deepgram's SDK only tells us about a dead connection reactively (onClose/
+// onError) — but flipping off Wi-Fi doesn't necessarily error an already-open
+// TCP socket right away; the OS can take a long time to notice. So this
+// actively probes connectivity on a timer instead of just waiting to be told.
+const CONNECTIVITY_CHECK_TIMEOUT_MS = 4 * 1000;
+
+async function isInternetReachable() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CONNECTIVITY_CHECK_TIMEOUT_MS);
+  try {
+    await fetch("https://api.deepgram.com/", { method: "HEAD", signal: controller.signal });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function startHealthTimer(ws, state) {
+  if (state.healthTimer) return;
+  state.healthTimer = setInterval(async () => {
+    if (!state.listeningRequested) return;
+
+    if (state.sttMode === "online") {
+      const reachable = await isInternetReachable();
+      if (!reachable && state.listeningRequested && state.sttMode === "online") {
+        console.warn("Health check: internet unreachable — forcing offline fallback.");
+        if (state.deepgram) {
+          try {
+            state.deepgram.close();
+          } catch {
+            /* already closed */
+          }
+          state.deepgram = null;
+          state.deepgramReady = false;
+        }
+        enterOfflineMode(ws, state);
+      }
+    } else if (state.sttMode === "offline") {
+      const connected = await tryConnectDeepgram(ws, state);
+      if (connected) exitOfflineMode(ws, state);
+    }
+  }, HEALTH_CHECK_INTERVAL_MS);
+}
+
+function stopHealthTimer(state) {
+  if (state.healthTimer) {
+    clearInterval(state.healthTimer);
+    state.healthTimer = null;
+  }
+}
+
 function enterOfflineMode(ws, state) {
   if (state.sttMode === "offline") return;
   if (!offlineWhisper.isAvailable()) {
@@ -231,23 +286,12 @@ function enterOfflineMode(ws, state) {
   }
   state.sttMode = "offline";
   send(ws, { type: "stt-mode", mode: "offline" });
-  if (!state.offlineRetryTimer) {
-    state.offlineRetryTimer = setInterval(async () => {
-      if (!state.listeningRequested) return;
-      const connected = await tryConnectDeepgram(ws, state);
-      if (connected) exitOfflineMode(ws, state);
-    }, DEEPGRAM_RECONNECT_INTERVAL_MS);
-  }
 }
 
 function exitOfflineMode(ws, state) {
   if (state.sttMode !== "offline") return;
   state.sttMode = "online";
   send(ws, { type: "stt-mode", mode: "online" });
-  if (state.offlineRetryTimer) {
-    clearInterval(state.offlineRetryTimer);
-    state.offlineRetryTimer = null;
-  }
 }
 
 async function startDeepgramForOperator(ws, state) {
@@ -255,6 +299,7 @@ async function startDeepgramForOperator(ws, state) {
   if (state.deepgram) return; // already running
 
   const connected = await tryConnectDeepgram(ws, state);
+  startHealthTimer(ws, state);
   if (connected) {
     exitOfflineMode(ws, state);
     return;
@@ -274,6 +319,7 @@ async function startDeepgramForOperator(ws, state) {
 
 function stopDeepgramForOperator(state) {
   state.listeningRequested = false;
+  stopHealthTimer(state);
   if (state.deepgram) {
     try {
       state.deepgram.close();
@@ -285,10 +331,6 @@ function stopDeepgramForOperator(state) {
   state.deepgramReady = false;
   state.audioQueue = [];
   state.sttMode = "online";
-  if (state.offlineRetryTimer) {
-    clearInterval(state.offlineRetryTimer);
-    state.offlineRetryTimer = null;
-  }
 }
 
 wss.on("connection", (ws, req) => {
@@ -314,7 +356,7 @@ wss.on("connection", (ws, req) => {
     mode: "manual", // "manual" = suggestions wait for Approve; "auto" = shown immediately
     sttMode: "online", // "online" = Deepgram; "offline" = local whisper.cpp fallback
     listeningRequested: false,
-    offlineRetryTimer: null,
+    healthTimer: null, // periodic connectivity probe + offline->online reconnect attempts
   };
   operatorState.set(ws, state);
   send(ws, { type: "background", background: currentBackground });
