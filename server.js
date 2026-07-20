@@ -7,11 +7,14 @@ const fs = require("fs");
 const crypto = require("crypto");
 const multer = require("multer");
 const { createSession, parseTranscript } = require("./lib/referenceParser");
-const { fetchVerseText } = require("./lib/bollsClient");
+const { fetchVerseText, fetchVerseRange, listEnglishTranslations, POPULAR_TRANSLATION_CODES } = require("./lib/bollsClient");
 const { bookById, findBookByAlias } = require("./lib/books");
 const { createBufferState, clearBuffer, findParaphraseMatch } = require("./lib/paraphraseMatcher");
 const deepgram = require("./lib/deepgramSession");
 const { sanitizeCustomTextHtml, normalizeFontSize } = require("./lib/richText");
+const sermonLog = require("./lib/sermonLog");
+const { buildTranscriptText, buildTranscriptPdf } = require("./lib/sermonExport");
+const PDFDocument = require("pdfkit");
 const {
   PRESETS: BACKGROUND_PRESETS,
   DEFAULT_BACKGROUND,
@@ -57,6 +60,35 @@ app.post("/api/backgrounds/upload", upload.single("file"), (req, res) => {
   res.json({ url: `/uploads/${req.file.filename}`, type });
 });
 
+app.get("/api/translations", async (req, res) => {
+  try {
+    res.json({ translations: await listEnglishTranslations(), popular: POPULAR_TRANSLATION_CODES });
+  } catch (err) {
+    res.status(502).json({ error: `Could not load translations: ${err.message}` });
+  }
+});
+
+function exportFilename(ext) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  return `sermon-${stamp}.${ext}`;
+}
+
+app.get("/api/export/transcript.txt", (req, res) => {
+  const body = buildTranscriptText(sermonLog.getLog());
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${exportFilename("txt")}"`);
+  res.send(body);
+});
+
+app.get("/api/export/transcript.pdf", (req, res) => {
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${exportFilename("pdf")}"`);
+  const doc = new PDFDocument({ margin: 50 });
+  doc.pipe(res);
+  buildTranscriptPdf(doc, sermonLog.getLog());
+  doc.end();
+});
+
 app.use((err, req, res, next) => {
   if (err) return res.status(400).json({ error: err.message || "Upload failed." });
   next();
@@ -91,6 +123,11 @@ function dedupeKey(s) {
   return `${s.bookId}:${s.chapter}:${s.verse}`;
 }
 
+function formatVerseRef(s) {
+  if (s.isChapterOnly) return `${s.bookName} ${s.chapter}`;
+  return s.verseEnd ? `${s.bookName} ${s.chapter}:${s.verse}-${s.verseEnd}` : `${s.bookName} ${s.chapter}:${s.verse}`;
+}
+
 function pruneRecent(recent, now) {
   for (const [key, ts] of recent) {
     if (now - ts > SUGGESTION_DEDUPE_MS * 3) recent.delete(key);
@@ -99,6 +136,7 @@ function pruneRecent(recent, now) {
 
 async function handleTranscriptFinal(ws, state, text) {
   send(ws, { type: "final", text });
+  sermonLog.recordTranscript(text);
 
   const now = Date.now();
   pruneRecent(state.recent, now);
@@ -254,12 +292,48 @@ wss.on("connection", (ws, req) => {
         currentShow = { type: "show", ...suggestion };
         broadcastState(currentShow);
         state.pending.delete(msg.id);
+        sermonLog.recordVerse({ ref: formatVerseRef(suggestion), translation: suggestion.translation, text: suggestion.text });
       }
       return;
     }
 
     if (msg.type === "reject" && msg.id) {
       state.pending.delete(msg.id);
+      return;
+    }
+
+    if (msg.type === "switch-translation" && msg.id && typeof msg.translation === "string") {
+      const suggestion = state.pending.get(msg.id);
+      if (suggestion) {
+        try {
+          const result = suggestion.verseEnd
+            ? await fetchVerseRange(suggestion.bookId, suggestion.chapter, suggestion.verse, suggestion.verseEnd, msg.translation)
+            : await fetchVerseText(suggestion.bookId, suggestion.chapter, suggestion.verse, msg.translation);
+          const updated = { ...suggestion, translation: msg.translation, text: result ? result.text : null };
+          state.pending.set(msg.id, updated);
+          send(ws, { type: "suggestion", suggestion: updated });
+        } catch (err) {
+          send(ws, { type: "error", message: `Translation lookup failed: ${err.message}` });
+        }
+      }
+      return;
+    }
+
+    // Switches the translation of whatever is currently live on the projector
+    // (as opposed to switch-translation, which is for a pending suggestion
+    // card that hasn't been approved yet).
+    if (msg.type === "switch-live-translation" && typeof msg.translation === "string") {
+      if (currentShow && currentShow.type === "show" && !currentShow.custom && currentShow.bookId) {
+        try {
+          const result = currentShow.verseEnd
+            ? await fetchVerseRange(currentShow.bookId, currentShow.chapter, currentShow.verse, currentShow.verseEnd, msg.translation)
+            : await fetchVerseText(currentShow.bookId, currentShow.chapter, currentShow.verse, msg.translation);
+          currentShow = { ...currentShow, translation: msg.translation, text: result ? result.text : null };
+          broadcastState(currentShow);
+        } catch (err) {
+          send(ws, { type: "error", message: `Translation lookup failed: ${err.message}` });
+        }
+      }
       return;
     }
 
@@ -279,24 +353,30 @@ wss.on("connection", (ws, req) => {
       const book = bookById(msg.bookId) || findBookByAlias(msg.bookName || "");
       const chapter = parseInt(msg.chapter, 10);
       const verse = parseInt(msg.verse, 10);
+      const verseEndRaw = msg.verseEnd ? parseInt(msg.verseEnd, 10) : null;
+      const verseEnd = verseEndRaw && verseEndRaw > verse ? verseEndRaw : null;
       if (book && chapter && verse) {
         try {
-          const result = await fetchVerseText(book.id, chapter, verse, TRANSLATION);
+          const result = verseEnd
+            ? await fetchVerseRange(book.id, chapter, verse, verseEnd, TRANSLATION)
+            : await fetchVerseText(book.id, chapter, verse, TRANSLATION);
           const suggestion = {
             id: crypto.randomUUID(),
             bookId: book.id,
             bookName: book.name,
             chapter,
             verse,
+            verseEnd: verseEnd || undefined,
             isChapterOnly: false,
             source: "manual",
-            raw: `${book.name} ${chapter}:${verse}`,
             translation: TRANSLATION,
             text: result ? result.text : null,
             createdAt: Date.now(),
           };
+          suggestion.raw = formatVerseRef(suggestion);
           currentShow = { type: "show", ...suggestion };
           broadcastState(currentShow);
+          sermonLog.recordVerse({ ref: suggestion.raw, translation: suggestion.translation, text: suggestion.text });
         } catch (err) {
           send(ws, { type: "error", message: `Lookup failed: ${err.message}` });
         }

@@ -46,6 +46,16 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   words, without a chapter:verse citation.
 - **Bible text**: the free [Bolls Bible API](https://bolls.life) — no
   hosting, no licensing, defaults to the public-domain KJV.
+- **Translation switching**: every translation dropdown (suggestion cards,
+  and the live one in Projector Preview) lists AMP/KJV/NKJV/ESV/NIV/NASB/
+  NLT/ASV/MSG/ISV directly, with the other 30 English translations Bolls
+  offers tucked under a "More" group. Switching a **suggestion card's**
+  dropdown re-fetches that verse and updates the card in place before you
+  approve it. Switching the **Projector Preview's** dropdown re-fetches
+  whatever's *currently live on the projector* and updates it in real
+  time — the congregation sees the translation change immediately, no
+  re-approval needed. Some translations (NIV, ESV, etc.) are copyrighted —
+  see the licensing note under Configuration.
 - **Display**: a separate fullscreen page you drag to the projector/TV's
   screen; it only updates when the operator approves a suggestion.
 - **Backgrounds**: [`lib/backgrounds.js`](lib/backgrounds.js) — six built-in
@@ -76,6 +86,25 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   from layered `text-shadow`, not `-webkit-text-stroke` — Chrome silently
   drops underline rendering when `-webkit-text-stroke` is present, which
   surfaced during testing.
+- **Sermon export**: [`lib/sermonLog.js`](lib/sermonLog.js) /
+  [`lib/sermonExport.js`](lib/sermonExport.js) — the server keeps a running
+  record of every finalized transcript chunk and every verse actually
+  approved/shown (not every suggestion) for the current service. **Export
+  TXT** / **Export PDF** links next to the Live Transcript panel download
+  the full record — a "Scripture References Shown" section followed by the
+  full transcript, each timestamped. This log is in-memory and global:
+  restarting the server starts a fresh one for the next service.
+- **Local audio recording** (frontend-only): every audio chunk captured for
+  Deepgram is also kept in the browser's memory. The **Download Audio**
+  link (next to Export TXT/PDF) bundles all of it into a `.webm` file and
+  downloads it straight from the browser — no server involved, nothing
+  uploaded anywhere. Recording accumulates across multiple Start/Stop
+  Listening cycles in one page session; reloading the page clears it.
+- **Text-to-speech** (frontend-only): the **🔊 Speak** button next to
+  Custom Text's Project button reads the typed text aloud using the
+  browser's built-in `speechSynthesis` API — useful for proofreading an
+  announcement before projecting it. Click again (now "⏹ Stop") to cancel
+  mid-sentence.
 
 ## Setup
 
@@ -114,7 +143,8 @@ Then open, on the same laptop:
 5. Use the **Clear Display** button to blank the screen between verses.
 6. If a reference is missed or misheard, type it directly into the manual
    box (e.g. `John 3:16`) and click **Show** — it goes straight to the
-   display.
+   display. It also accepts verse ranges, e.g. `John 4:5-6`, which displays
+   both verses together (capped at 30 verses per range).
 7. Pick a background from the swatch bar under the header — solid/gradient
    presets, motion (video) backgrounds from your library folder, or click
    **Upload Image/Video** to add your own — it updates the projector

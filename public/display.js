@@ -17,6 +17,12 @@
     ws.onclose = () => setTimeout(connect, 1500);
   }
 
+  function formatRef(msg) {
+    if (msg.isChapterOnly) return `${msg.bookName} ${msg.chapter} (${msg.translation})`;
+    const verses = msg.verseEnd ? `${msg.verse}-${msg.verseEnd}` : msg.verse;
+    return `${msg.bookName} ${msg.chapter}:${verses} (${msg.translation})`;
+  }
+
   function showVerse(msg) {
     if (msg.custom) {
       // Server already sanitized this HTML (lib/richText.js) — safe to render directly.
@@ -25,12 +31,9 @@
       verseRef.textContent = "";
       verseRef.style.display = "none";
     } else {
-      const ref = msg.isChapterOnly
-        ? `${msg.bookName} ${msg.chapter} (${msg.translation})`
-        : `${msg.bookName} ${msg.chapter}:${msg.verse} (${msg.translation})`;
       verseText.textContent = msg.text || "";
       verseText.className = "size-normal";
-      verseRef.textContent = ref;
+      verseRef.textContent = formatRef(msg);
       verseRef.style.display = "";
     }
     stage.classList.add("visible");
