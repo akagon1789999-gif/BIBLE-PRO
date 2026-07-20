@@ -23,6 +23,8 @@
   const bgFileInput = document.getElementById("bgFileInput");
   const downloadRecordingLink = document.getElementById("downloadRecordingLink");
   const speakBtn = document.getElementById("speakBtn");
+  const modeManualBtn = document.getElementById("modeManualBtn");
+  const modeAutoBtn = document.getElementById("modeAutoBtn");
 
   let ws = null;
   let mediaStream = null;
@@ -32,10 +34,12 @@
   let availableTranslations = [];
   let popularTranslationCodes = [];
   let recordedChunks = []; // audio Blobs from every Start Listening session, for local download only
+  let currentMode = "manual"; // re-sent to the server on every (re)connect — see set-mode below
 
   function connectWs() {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     ws = new WebSocket(`${proto}//${location.host}/ws?role=operator`);
+    ws.onopen = () => wsSend({ type: "set-mode", mode: currentMode });
     ws.onmessage = (evt) => {
       const msg = JSON.parse(evt.data);
       if (msg.type === "suggestion") addSuggestionCard(msg.suggestion);
@@ -209,6 +213,15 @@
   };
 
   clearBtn.onclick = () => wsSend({ type: "clear" });
+
+  function setMode(mode) {
+    currentMode = mode;
+    modeManualBtn.classList.toggle("active", mode === "manual");
+    modeAutoBtn.classList.toggle("active", mode === "auto");
+    wsSend({ type: "set-mode", mode });
+  }
+  modeManualBtn.onclick = () => setMode("manual");
+  modeAutoBtn.onclick = () => setMode("auto");
 
   downloadRecordingLink.onclick = (e) => {
     e.preventDefault();

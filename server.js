@@ -169,8 +169,15 @@ async function handleTranscriptFinal(ws, state, text) {
 
     const id = crypto.randomUUID();
     const suggestion = { id, ...s, translation: TRANSLATION, text: verseText, createdAt: now };
-    state.pending.set(id, suggestion);
-    send(ws, { type: "suggestion", suggestion });
+
+    if (state.mode === "auto") {
+      currentShow = { type: "show", ...suggestion };
+      broadcastState(currentShow);
+      sermonLog.recordVerse({ ref: formatVerseRef(suggestion), translation: suggestion.translation, text: suggestion.text });
+    } else {
+      state.pending.set(id, suggestion);
+      send(ws, { type: "suggestion", suggestion });
+    }
   }
 }
 
@@ -244,6 +251,7 @@ wss.on("connection", (ws, req) => {
     deepgram: null,
     deepgramReady: false,
     audioQueue: [],
+    mode: "manual", // "manual" = suggestions wait for Approve; "auto" = shown immediately
   };
   operatorState.set(ws, state);
   send(ws, { type: "background", background: currentBackground });
@@ -278,6 +286,11 @@ wss.on("connection", (ws, req) => {
 
     if (msg.type === "stop-audio") {
       stopDeepgramForOperator(state);
+      return;
+    }
+
+    if (msg.type === "set-mode" && (msg.mode === "auto" || msg.mode === "manual")) {
+      state.mode = msg.mode;
       return;
     }
 

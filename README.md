@@ -30,6 +30,14 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   server relays it to Deepgram and gets back interim/final transcripts. The
   Deepgram API key lives only in `.env` on the server — it's never sent to
   the browser.
+- **Manual / Auto mode**: a toggle in the header controls what happens when
+  a verse is detected from speech. **Manual** (default) queues it as a card
+  in Verse Suggestions for you to Approve or Reject. **Auto** skips the
+  queue entirely and puts it straight on the projector. This only affects
+  speech-detected suggestions — manual entry and Custom Text always go
+  straight to the display regardless of mode, since typing/clicking those
+  already *is* the approval. The mode is per-connection (not shared across
+  operator tabs) and re-syncs itself after any reconnect.
 - **Reference detection**: [`lib/referenceParser.js`](lib/referenceParser.js)
   — regex + a small state machine that catches explicit refs ("John 3:16"),
   trigger phrases ("turn to...", "open your Bible to...", "let's look at..."),
@@ -137,9 +145,11 @@ Then open, on the same laptop:
    fullscreen.
 3. On the Operator console, click **Start Listening** and grant microphone
    access when Chrome asks.
-4. As the pastor preaches, detected verses appear as cards on the right.
-   Click **Approve ▸ Display** to send one to the screen, or **Reject** to
-   dismiss it.
+4. Choose **Manual** or **Auto** mode in the header. In Manual (default),
+   detected verses appear as cards on the right — click **Approve ▸
+   Display** to send one to the screen, or **Reject** to dismiss it. In
+   Auto, detected verses go straight to the screen with no card and no
+   click needed.
 5. Use the **Clear Display** button to blank the screen between verses.
 6. If a reference is missed or misheard, type it directly into the manual
    box (e.g. `John 3:16`) and click **Show** — it goes straight to the

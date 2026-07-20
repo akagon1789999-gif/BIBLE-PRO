@@ -49,6 +49,16 @@
   .btn-primary { background: var(--accent); color: white; }
   .btn-danger { background: var(--bad); color: white; }
   .btn-neutral { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .mode-toggle {
+    display: flex; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 2px; gap: 2px;
+  }
+  .mode-btn {
+    background: transparent; color: var(--muted); border: none; border-radius: 6px;
+    padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+  }
+  .mode-btn:hover { opacity: 1; color: var(--text); }
+  .mode-btn.active { background: var(--accent); color: white; }
   main {
     flex: 1;
     display: grid;
@@ -202,6 +212,10 @@
   <header>
     <span class="status-dot" id="statusDot"></span>
     <h1>Projector Bible — Operator Console</h1>
+    <div class="mode-toggle" role="group" aria-label="Approval mode">
+      <button type="button" class="mode-btn active" id="modeManualBtn" title="Suggestions wait for your Approve click">Manual</button>
+      <button type="button" class="mode-btn" id="modeAutoBtn" title="Detected verses are shown immediately, no approval needed">Auto</button>
+    </div>
     <button class="btn-primary" id="listenBtn">Start Listening</button>
     <button class="btn-danger" id="clearBtn">Clear Display</button>
   </header>
