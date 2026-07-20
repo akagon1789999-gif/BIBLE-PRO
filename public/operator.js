@@ -26,6 +26,7 @@
   const modeManualBtn = document.getElementById("modeManualBtn");
   const modeAutoBtn = document.getElementById("modeAutoBtn");
   const installBtn = document.getElementById("installBtn");
+  const sttModeLabel = document.getElementById("sttModeLabel");
 
   let ws = null;
   let mediaStream = null;
@@ -36,6 +37,19 @@
   let popularTranslationCodes = [];
   let recordedChunks = []; // audio Blobs from every Start Listening session, for local download only
   let currentMode = "manual"; // re-sent to the server on every (re)connect — see set-mode below
+
+  // Offline speech fallback: a second, independent capture path (Web Audio
+  // API, not MediaRecorder) that only spins up when the server says Deepgram
+  // is unreachable. Builds real 16kHz mono WAV files in pure JS — no ffmpeg,
+  // no server-side conversion needed.
+  const OFFLINE_SAMPLE_RATE = 16000;
+  const OFFLINE_SEGMENT_MS = 5000;
+  let offlineAudioContext = null;
+  let offlineProcessor = null;
+  let offlineSourceNode = null;
+  let offlineSilentGain = null;
+  let offlineChunks = [];
+  let offlineFlushTimer = null;
 
   function connectWs() {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -52,6 +66,7 @@
       if (msg.type === "show") showPreview(msg);
       if (msg.type === "clear") hidePreview();
       if (msg.type === "background") applyPreviewBackground(msg.background);
+      if (msg.type === "stt-mode") applySttMode(msg.mode);
       if (msg.type === "error") {
         console.error(msg.message);
         alert(msg.message);
@@ -202,6 +217,8 @@
     mediaRecorder = null;
     mediaStream = null;
     wsSend({ type: "stop-audio" });
+    stopOfflineCapture();
+    sttModeLabel.style.display = "none";
 
     listening = false;
     statusDot.classList.remove("live");
@@ -214,6 +231,132 @@
   };
 
   clearBtn.onclick = () => wsSend({ type: "clear" });
+
+  function applySttMode(mode) {
+    if (mode === "offline") {
+      sttModeLabel.textContent = "📡 Offline mode — local speech engine";
+      sttModeLabel.classList.add("offline");
+      startOfflineCapture();
+    } else {
+      sttModeLabel.textContent = "🌐 Online — Deepgram";
+      sttModeLabel.classList.remove("offline");
+      stopOfflineCapture();
+    }
+    sttModeLabel.style.display = "inline-block";
+  }
+
+  function startOfflineCapture() {
+    if (offlineAudioContext || !mediaStream) return;
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    offlineAudioContext = new AudioContextCtor({ sampleRate: OFFLINE_SAMPLE_RATE });
+    offlineSourceNode = offlineAudioContext.createMediaStreamSource(mediaStream);
+    offlineProcessor = offlineAudioContext.createScriptProcessor(4096, 1, 1);
+    offlineChunks = [];
+    offlineProcessor.onaudioprocess = (e) => {
+      offlineChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    };
+    // ScriptProcessorNode only fires once connected through to the destination.
+    // Route through a silent gain so the mic is never actually played back
+    // (would otherwise risk feedback through the sanctuary's speakers).
+    offlineSilentGain = offlineAudioContext.createGain();
+    offlineSilentGain.gain.value = 0;
+    offlineSourceNode.connect(offlineProcessor);
+    offlineProcessor.connect(offlineSilentGain);
+    offlineSilentGain.connect(offlineAudioContext.destination);
+
+    offlineFlushTimer = setInterval(flushOfflineSegment, OFFLINE_SEGMENT_MS);
+  }
+
+  function stopOfflineCapture() {
+    if (offlineFlushTimer) {
+      clearInterval(offlineFlushTimer);
+      offlineFlushTimer = null;
+    }
+    if (offlineProcessor) {
+      offlineProcessor.disconnect();
+      offlineProcessor.onaudioprocess = null;
+      offlineProcessor = null;
+    }
+    if (offlineSourceNode) {
+      offlineSourceNode.disconnect();
+      offlineSourceNode = null;
+    }
+    if (offlineSilentGain) {
+      offlineSilentGain.disconnect();
+      offlineSilentGain = null;
+    }
+    if (offlineAudioContext) {
+      offlineAudioContext.close().catch(() => {});
+      offlineAudioContext = null;
+    }
+    offlineChunks = [];
+  }
+
+  async function flushOfflineSegment() {
+    if (!offlineChunks.length) return;
+    const samples = mergeFloat32Arrays(offlineChunks);
+    offlineChunks = [];
+    if (samples.length < OFFLINE_SAMPLE_RATE * 0.5) return; // less than half a second — skip
+    const blob = buildWavBlob(samples, OFFLINE_SAMPLE_RATE);
+    const audioBase64 = await blobToBase64(blob);
+    wsSend({ type: "offline-audio", audioBase64 });
+  }
+
+  function mergeFloat32Arrays(chunks) {
+    const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+    const result = new Float32Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      result.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return result;
+  }
+
+  function floatTo16BitPCM(float32Array) {
+    const buffer = new ArrayBuffer(float32Array.length * 2);
+    const view = new DataView(buffer);
+    for (let i = 0, offset = 0; i < float32Array.length; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, float32Array[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return buffer;
+  }
+
+  function buildWavBlob(samples, sampleRate) {
+    const pcmBuffer = floatTo16BitPCM(samples);
+    const wavBuffer = new ArrayBuffer(44 + pcmBuffer.byteLength);
+    const view = new DataView(wavBuffer);
+    const writeString = (offset, str) => {
+      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    };
+    writeString(0, "RIFF");
+    view.setUint32(4, 36 + pcmBuffer.byteLength, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, 1, true); // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); // byte rate
+    view.setUint16(32, 2, true); // block align
+    view.setUint16(34, 16, true); // bits per sample
+    writeString(36, "data");
+    view.setUint32(40, pcmBuffer.byteLength, true);
+    new Uint8Array(wavBuffer, 44).set(new Uint8Array(pcmBuffer));
+    return new Blob([wavBuffer], { type: "audio/wav" });
+  }
+
+  async function blobToBase64(blob) {
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  }
 
   function setMode(mode) {
     currentMode = mode;

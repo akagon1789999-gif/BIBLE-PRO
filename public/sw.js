@@ -4,7 +4,7 @@
 // (API calls, the WebSocket, uploaded/motion media) always goes to the
 // network so nothing here can ever serve stale Scripture, verses,
 // backgrounds, or transcripts.
-const CACHE_NAME = "projector-bible-v1";
+const CACHE_NAME = "projector-bible-v2";
 const APP_SHELL = [
   "/operator.html",
   "/operator.js",
@@ -37,5 +37,18 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" || NEVER_CACHE_PREFIXES.some((p) => url.pathname.startsWith(p))) {
     return; // let the browser handle it normally — no offline fallback for dynamic/live data
   }
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
+  // Network-first, not cache-first: always serve the freshest operator.js/
+  // display.js when online (a stale cache-first strategy here previously
+  // caused genuinely confusing bugs during development — edits wouldn't
+  // show up until the cache was manually cleared). Only fall back to the
+  // cached copy when the network request actually fails, i.e. really offline.
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
+  );
 });

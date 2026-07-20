@@ -11,6 +11,7 @@ const { fetchVerseText, fetchVerseRange, listEnglishTranslations, POPULAR_TRANSL
 const { bookById, findBookByAlias } = require("./lib/books");
 const { createBufferState, clearBuffer, findParaphraseMatch } = require("./lib/paraphraseMatcher");
 const deepgram = require("./lib/deepgramSession");
+const offlineWhisper = require("./lib/offlineWhisper");
 const { sanitizeCustomTextHtml, normalizeFontSize } = require("./lib/richText");
 const sermonLog = require("./lib/sermonLog");
 const { buildTranscriptText, buildTranscriptPdf } = require("./lib/sermonExport");
@@ -27,6 +28,7 @@ const {
 const PORT = process.env.PORT || 3000;
 const TRANSLATION = process.env.TRANSLATION || "KJV";
 const SUGGESTION_DEDUPE_MS = 20 * 1000;
+const DEEPGRAM_RECONNECT_INTERVAL_MS = 20 * 1000;
 
 const uploadsDir = path.join(__dirname, "public", "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
@@ -181,13 +183,11 @@ async function handleTranscriptFinal(ws, state, text) {
   }
 }
 
-async function startDeepgramForOperator(ws, state) {
-  if (state.deepgram) return; // already running
-  if (!deepgram.isConfigured()) {
-    send(ws, { type: "error", message: "Server is not configured with a Deepgram API key." });
-    return;
-  }
-
+// Returns true if a live Deepgram session is now running. Never throws —
+// connection failures are just reported back via the boolean so callers can
+// fall back to the offline engine.
+async function tryConnectDeepgram(ws, state) {
+  if (!deepgram.isConfigured()) return false;
   try {
     const connection = await deepgram.startSession({
       onFinal: (text) => {
@@ -198,12 +198,13 @@ async function startDeepgramForOperator(ws, state) {
       onInterim: (text) => send(ws, { type: "interim", text }),
       onError: (err) => {
         console.error("Deepgram error:", err && err.message ? err.message : err);
-        send(ws, { type: "error", message: "Speech recognition error." });
       },
       onClose: () => {
         if (state.deepgram === connection) {
           state.deepgram = null;
           state.deepgramReady = false;
+          // Dropped mid-session (not a deliberate Stop Listening) — fall back.
+          if (state.listeningRequested) enterOfflineMode(ws, state);
         }
       },
     });
@@ -212,13 +213,67 @@ async function startDeepgramForOperator(ws, state) {
     state.deepgramReady = true;
     for (const chunk of state.audioQueue) connection.sendMedia(chunk);
     state.audioQueue = [];
+    return true;
   } catch (err) {
     console.error("Failed to start Deepgram session:", err.message);
-    send(ws, { type: "error", message: "Could not start speech recognition." });
+    return false;
+  }
+}
+
+function enterOfflineMode(ws, state) {
+  if (state.sttMode === "offline") return;
+  if (!offlineWhisper.isAvailable()) {
+    send(ws, {
+      type: "error",
+      message: "Lost connection to Deepgram, and no offline speech engine is installed. Speech recognition is paused.",
+    });
+    return;
+  }
+  state.sttMode = "offline";
+  send(ws, { type: "stt-mode", mode: "offline" });
+  if (!state.offlineRetryTimer) {
+    state.offlineRetryTimer = setInterval(async () => {
+      if (!state.listeningRequested) return;
+      const connected = await tryConnectDeepgram(ws, state);
+      if (connected) exitOfflineMode(ws, state);
+    }, DEEPGRAM_RECONNECT_INTERVAL_MS);
+  }
+}
+
+function exitOfflineMode(ws, state) {
+  if (state.sttMode !== "offline") return;
+  state.sttMode = "online";
+  send(ws, { type: "stt-mode", mode: "online" });
+  if (state.offlineRetryTimer) {
+    clearInterval(state.offlineRetryTimer);
+    state.offlineRetryTimer = null;
+  }
+}
+
+async function startDeepgramForOperator(ws, state) {
+  state.listeningRequested = true;
+  if (state.deepgram) return; // already running
+
+  const connected = await tryConnectDeepgram(ws, state);
+  if (connected) {
+    exitOfflineMode(ws, state);
+    return;
+  }
+
+  if (offlineWhisper.isAvailable()) {
+    enterOfflineMode(ws, state);
+  } else {
+    send(ws, {
+      type: "error",
+      message: deepgram.isConfigured()
+        ? "Could not reach Deepgram, and no offline speech engine is installed. Speech recognition is unavailable."
+        : "Server is not configured with a Deepgram API key, and no offline speech engine is installed.",
+    });
   }
 }
 
 function stopDeepgramForOperator(state) {
+  state.listeningRequested = false;
   if (state.deepgram) {
     try {
       state.deepgram.close();
@@ -229,6 +284,11 @@ function stopDeepgramForOperator(state) {
   state.deepgram = null;
   state.deepgramReady = false;
   state.audioQueue = [];
+  state.sttMode = "online";
+  if (state.offlineRetryTimer) {
+    clearInterval(state.offlineRetryTimer);
+    state.offlineRetryTimer = null;
+  }
 }
 
 wss.on("connection", (ws, req) => {
@@ -252,6 +312,9 @@ wss.on("connection", (ws, req) => {
     deepgramReady: false,
     audioQueue: [],
     mode: "manual", // "manual" = suggestions wait for Approve; "auto" = shown immediately
+    sttMode: "online", // "online" = Deepgram; "offline" = local whisper.cpp fallback
+    listeningRequested: false,
+    offlineRetryTimer: null,
   };
   operatorState.set(ws, state);
   send(ws, { type: "background", background: currentBackground });
@@ -291,6 +354,21 @@ wss.on("connection", (ws, req) => {
 
     if (msg.type === "set-mode" && (msg.mode === "auto" || msg.mode === "manual")) {
       state.mode = msg.mode;
+      return;
+    }
+
+    // A ~5s WAV segment recorded client-side while offline (see operator.js's
+    // Web Audio API capture) — transcribed locally and fed through the exact
+    // same pipeline Deepgram's finals use, so verse detection just keeps working.
+    if (msg.type === "offline-audio" && typeof msg.audioBase64 === "string") {
+      if (state.sttMode !== "offline") return; // stale segment from just before reconnecting
+      try {
+        const wavBuffer = Buffer.from(msg.audioBase64, "base64");
+        const text = await offlineWhisper.transcribeWavBuffer(wavBuffer);
+        if (text) await handleTranscriptFinal(ws, state, text);
+      } catch (err) {
+        console.error("Offline transcription failed:", err.message);
+      }
       return;
     }
 

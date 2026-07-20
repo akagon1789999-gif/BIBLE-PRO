@@ -212,12 +212,18 @@
   .swatch video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
   #background-bar .spacer { flex: 1; }
   #background-bar .bg-divider { width: 1px; align-self: stretch; background: var(--border); margin: 0 2px; }
+  .stt-mode-label {
+    font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px;
+    background: var(--panel-2); color: var(--muted);
+  }
+  .stt-mode-label.offline { background: rgba(231, 76, 60, 0.18); color: #ff8a7a; }
 </style>
 </head>
 <body>
   <header>
     <span class="status-dot" id="statusDot"></span>
     <h1>Projector Bible — Operator Console</h1>
+    <span class="stt-mode-label" id="sttModeLabel" style="display:none"></span>
     <div class="mode-toggle" role="group" aria-label="Approval mode">
       <button type="button" class="mode-btn active" id="modeManualBtn" title="Suggestions wait for your Approve click">Manual</button>
       <button type="button" class="mode-btn" id="modeAutoBtn" title="Detected verses are shown immediately, no approval needed">Auto</button>

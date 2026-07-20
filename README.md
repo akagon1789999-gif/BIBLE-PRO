@@ -30,6 +30,42 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   server relays it to Deepgram and gets back interim/final transcripts. The
   Deepgram API key lives only in `.env` on the server — it's never sent to
   the browser.
+- **Offline fallback** ([`lib/offlineWhisper.js`](lib/offlineWhisper.js)):
+  if Deepgram can't be reached — connection drops mid-service, or fails to
+  start — the server automatically switches to a local `whisper.cpp` model
+  (via the optional `nodejs-whisper` package) and tells the operator's
+  browser to start sending it audio instead. It retries Deepgram every 20s
+  in the background and switches back the moment it reconnects.
+  - **One-time setup, while online**: `npm run setup:offline-stt` downloads
+    the model and compiles `whisper.cpp` — this can't happen automatically
+    later, since it needs internet the model won't have once it's actually
+    needed. Needs `make`/`gcc`/`clang` (present on macOS via Xcode Command
+    Line Tools) and `cmake` — if you don't have Homebrew, `python3 -m pip
+    install --user cmake` works fine.
+  - **Model**: `base.en` by default (good speed/accuracy balance on CPU;
+    ~2s to transcribe a 4s clip on this project's dev machine). Override
+    with `WHISPER_MODEL` (e.g. `tiny.en` for a slower CPU, `small.en` for
+    better accuracy) — re-run the setup script after changing it.
+  - **How audio gets to it**: no `ffmpeg` involved anywhere. The browser
+    builds real 16kHz mono WAV files directly via the Web Audio API
+    (`AudioContext` + `ScriptProcessorNode`, muted through a silent
+    `GainNode` so nothing is ever played back through the room's speakers)
+    and sends ~5-second segments to the server, which feeds them straight
+    into whisper.cpp and then through the *exact same* reference-detection
+    pipeline Deepgram's output uses — Auto/Manual mode, sermon logging, all
+    of it, unchanged.
+  - **Honest limitations**: this is a fallback, not a Deepgram replacement.
+    Each ~5s segment is transcribed independently (no cross-chunk context,
+    so sentences can get cut awkwardly at boundaries), there are no interim
+    results while offline, and there's a few-second gap during the online↔
+    offline handover — not an instant, zero-gap hot-swap.
+  - **Deployment**: `nodejs-whisper` is an *optional* dependency
+    specifically so a build environment without `cmake` (Railway's, for
+    example) doesn't fail the whole `npm install` — it just runs without
+    offline fallback. This is fine: offline fallback only matters for a
+    laptop actually running the server locally. If Railway's internet goes
+    down, the whole hosted app is unreachable regardless of STT engine, so
+    there's nothing to fall back to there anyway.
 - **Manual / Auto mode**: a toggle in the header controls what happens when
   a verse is detected from speech. **Manual** (default) queues it as a card
   in Verse Suggestions for you to Approve or Reject. **Auto** skips the
@@ -114,10 +150,14 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   announcement before projecting it. Click again (now "⏹ Stop") to cancel
   mid-sentence.
 - **Installable (PWA)**: [`public/sw.js`](public/sw.js) is a minimal
-  service worker (caches the static app shell only — API calls, uploads,
-  and motion backgrounds always hit the network, so nothing here can ever
-  go stale) that, combined with a manifest, makes Chrome treat this as an
-  installable app. Operator and Display each get their **own** manifest
+  service worker that, combined with a manifest, makes Chrome treat this as
+  an installable app. It's network-first for the app shell (always fetches
+  the latest `operator.js`/`display.html`/etc. when online, only falling
+  back to its cache if the network request actually fails) — a cache-first
+  strategy here previously caused real confusion during development, where
+  edits silently didn't show up until the cache was manually cleared.
+  API calls, uploads, and motion backgrounds are never cached at all.
+  Operator and Display each get their **own** manifest
   (`manifest-operator.json` / `manifest-display.json`) with their own
   start page, since they're typically installed on different machines —
   the operator console gets a visible **📲 Install App** button in the
@@ -144,6 +184,13 @@ npm install
 npm start
 ```
 
+Optional, but recommended if this will run on a laptop where the internet
+might drop mid-service — do this once, while online:
+
+```bash
+npm run setup:offline-stt
+```
+
 Then open, on the same laptop:
 
 - **Operator console**: http://localhost:3000/operator.html
@@ -161,7 +208,9 @@ Then open, on the same laptop:
    detected verses appear as cards on the right — click **Approve ▸
    Display** to send one to the screen, or **Reject** to dismiss it. In
    Auto, detected verses go straight to the screen with no card and no
-   click needed.
+   click needed. If the internet drops, a **📡 Offline mode** badge appears
+   next to the header and everything keeps working via the local speech
+   engine (see Offline fallback above) — no action needed from you.
 5. Use the **Clear Display** button to blank the screen between verses.
 6. If a reference is missed or misheard, type it directly into the manual
    box (e.g. `John 3:16`) and click **Show** — it goes straight to the
@@ -180,8 +229,9 @@ Then open, on the same laptop:
 
 ## Configuration
 
-- `DEEPGRAM_API_KEY` — **required**, in `.env`. Speech recognition is
-  disabled without it (manual entry still works).
+- `DEEPGRAM_API_KEY` — in `.env`. Without it, live speech recognition only
+  works if offline fallback is set up (`npm run setup:offline-stt`);
+  otherwise manual entry and Custom Text still work regardless.
 - `PORT` — server port (default `3000`)
 - `TRANSLATION` — Bolls translation code to look up verses in (default
   `KJV`). Any public-domain translation works out of the box; copyrighted
@@ -189,6 +239,8 @@ Then open, on the same laptop:
   before using them in a public service.
 - `DEEPGRAM_MODEL` — Deepgram model (default `nova-3`)
 - `DEEPGRAM_LANGUAGE` — Deepgram language code (default `en`)
+- `WHISPER_MODEL` — offline fallback model (default `base.en`) — see
+  Offline fallback above. Re-run `npm run setup:offline-stt` after changing.
 - `MOTION_BACKGROUNDS_DIR` — folder scanned for video backgrounds (default
   `/Users/theunitychurch/Documents/STUDIO/images`)
 
