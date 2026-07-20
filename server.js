@@ -7,8 +7,14 @@ const fs = require("fs");
 const crypto = require("crypto");
 const multer = require("multer");
 const { createSession, parseTranscript } = require("./lib/referenceParser");
-const { fetchVerseText, fetchVerseRange, listEnglishTranslations, POPULAR_TRANSLATION_CODES } = require("./lib/bollsClient");
-const { bookById, findBookByAlias } = require("./lib/books");
+const {
+  fetchVerseText,
+  fetchVerseRange,
+  fetchChapter,
+  listEnglishTranslations,
+  POPULAR_TRANSLATION_CODES,
+} = require("./lib/bollsClient");
+const { BOOKS, bookById, findBookByAlias } = require("./lib/books");
 const { createBufferState, clearBuffer, findParaphraseMatch } = require("./lib/paraphraseMatcher");
 const deepgram = require("./lib/deepgramSession");
 const offlineWhisper = require("./lib/offlineWhisper");
@@ -69,6 +75,25 @@ app.get("/api/translations", async (req, res) => {
     res.json({ translations: await listEnglishTranslations(), popular: POPULAR_TRANSLATION_CODES });
   } catch (err) {
     res.status(502).json({ error: `Could not load translations: ${err.message}` });
+  }
+});
+
+app.get("/api/bible/books", (req, res) => {
+  res.json({ books: BOOKS.map((b) => ({ id: b.id, name: b.name, chapters: b.chapters })) });
+});
+
+app.get("/api/bible/chapter/:bookId/:chapter", async (req, res) => {
+  const book = bookById(parseInt(req.params.bookId, 10));
+  const chapter = parseInt(req.params.chapter, 10);
+  if (!book || !chapter || chapter < 1 || chapter > book.chapters) {
+    return res.status(400).json({ error: "Invalid book or chapter." });
+  }
+  const translation = req.query.translation || TRANSLATION;
+  try {
+    const verses = await fetchChapter(book.id, chapter, translation);
+    res.json({ bookId: book.id, bookName: book.name, chapter, translation, verses });
+  } catch (err) {
+    res.status(502).json({ error: `Could not load chapter: ${err.message}` });
   }
 });
 

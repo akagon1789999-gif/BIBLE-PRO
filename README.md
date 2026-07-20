@@ -182,6 +182,13 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   on Chrome's own address-bar install icon instead, since nothing should
   ever appear as UI chrome on what's actually being projected. Icons live
   in `public/icons/`.
+- **Bible Browser**: a panel for drilling down Old/New Testament → book →
+  chapter → verse list, for when you want to browse rather than type a
+  reference. Each verse has a **Project** button that sends the exact same
+  `manual` WebSocket message the Manual Entry box already used — no new
+  live-projection logic, it's just another way to trigger the existing one.
+  Backed by two new REST routes, `GET /api/bible/books` and
+  `GET /api/bible/chapter/:bookId/:chapter`, both read-only and stateless.
 
 ## Setup
 

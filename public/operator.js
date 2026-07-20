@@ -27,6 +27,10 @@
   const modeAutoBtn = document.getElementById("modeAutoBtn");
   const installBtn = document.getElementById("installBtn");
   const sttModeLabel = document.getElementById("sttModeLabel");
+  const bibleTranslationSelect = document.getElementById("bibleTranslationSelect");
+  const bibleBackBtn = document.getElementById("bibleBackBtn");
+  const bibleBreadcrumbLabel = document.getElementById("bibleBreadcrumbLabel");
+  const bibleBrowserBody = document.getElementById("bibleBrowserBody");
 
   let ws = null;
   let mediaStream = null;
@@ -166,6 +170,7 @@
       availableTranslations = data.translations || [];
       popularTranslationCodes = data.popular || [];
       liveTranslationSelect.innerHTML = translationOptionsHtml("KJV");
+      bibleTranslationSelect.innerHTML = translationOptionsHtml("KJV");
     } catch (err) {
       console.error("Failed to load translations:", err);
     }
@@ -628,7 +633,114 @@
     installBtn.style.display = "none";
   });
 
+  // --- Bible Browser: OT/NT -> book -> chapter -> verse list, drill-down navigation.
+  let bibleBooks = [];
+  let bibleView = "books"; // "books" | "chapters" | "verses" — only used by the Back button
+  let bibleSelectedBook = null;
+  let bibleSelectedChapter = null;
+
+  async function loadBibleBooks() {
+    try {
+      const res = await fetch("/api/bible/books");
+      const data = await res.json();
+      bibleBooks = data.books || [];
+      renderBibleBooksList();
+    } catch (err) {
+      console.error("Failed to load Bible books:", err);
+      bibleBrowserBody.innerHTML = '<div class="empty">Could not load books.</div>';
+    }
+  }
+
+  function renderBibleBooksList() {
+    bibleView = "books";
+    bibleBackBtn.style.display = "none";
+    bibleBreadcrumbLabel.textContent = "Old & New Testament";
+    const ot = bibleBooks.filter((b) => b.id <= 39);
+    const nt = bibleBooks.filter((b) => b.id >= 40);
+    const bookRow = (b) =>
+      `<div class="bible-book-item" data-book-id="${b.id}"><span>${escapeHtml(b.name)}</span><span>${b.chapters}</span></div>`;
+    bibleBrowserBody.innerHTML =
+      `<div class="bible-section-header">Old Testament</div>${ot.map(bookRow).join("")}` +
+      `<div class="bible-section-header">New Testament</div>${nt.map(bookRow).join("")}`;
+    bibleBrowserBody.querySelectorAll(".bible-book-item").forEach((el) => {
+      el.onclick = () => {
+        bibleSelectedBook = bibleBooks.find((b) => b.id === parseInt(el.dataset.bookId, 10));
+        renderBibleChapterGrid();
+      };
+    });
+  }
+
+  function renderBibleChapterGrid() {
+    bibleView = "chapters";
+    bibleBackBtn.style.display = "inline-block";
+    bibleBreadcrumbLabel.textContent = bibleSelectedBook.name;
+    const buttons = [];
+    for (let c = 1; c <= bibleSelectedBook.chapters; c++) {
+      buttons.push(`<button class="bible-chapter-btn" data-chapter="${c}">${c}</button>`);
+    }
+    bibleBrowserBody.innerHTML = `<div class="bible-chapter-grid">${buttons.join("")}</div>`;
+    bibleBrowserBody.querySelectorAll(".bible-chapter-btn").forEach((el) => {
+      el.onclick = () => {
+        bibleSelectedChapter = parseInt(el.dataset.chapter, 10);
+        loadBibleVerses();
+      };
+    });
+  }
+
+  async function loadBibleVerses() {
+    bibleView = "verses";
+    bibleBackBtn.style.display = "inline-block";
+    bibleBreadcrumbLabel.textContent = `${bibleSelectedBook.name} ${bibleSelectedChapter}`;
+    bibleBrowserBody.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      const translation = bibleTranslationSelect.value || "KJV";
+      const res = await fetch(
+        `/api/bible/chapter/${bibleSelectedBook.id}/${bibleSelectedChapter}?translation=${encodeURIComponent(translation)}`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load chapter");
+      renderBibleVerseList(data.verses);
+    } catch (err) {
+      console.error("Failed to load chapter:", err);
+      bibleBrowserBody.innerHTML = '<div class="empty">Could not load chapter.</div>';
+    }
+  }
+
+  function renderBibleVerseList(verses) {
+    bibleBrowserBody.innerHTML = verses
+      .map(
+        (v) => `
+        <div class="bible-verse-row">
+          <span class="bible-verse-num">${v.verse}</span>
+          <span class="bible-verse-text">${escapeHtml(v.text)}</span>
+          <button class="bible-verse-project" data-verse="${v.verse}">Project</button>
+        </div>`
+      )
+      .join("");
+    bibleBrowserBody.querySelectorAll(".bible-verse-project").forEach((el) => {
+      el.onclick = () => {
+        wsSend({
+          type: "manual",
+          bookId: bibleSelectedBook.id,
+          bookName: bibleSelectedBook.name,
+          chapter: bibleSelectedChapter,
+          verse: parseInt(el.dataset.verse, 10),
+        });
+      };
+    });
+  }
+
+  bibleBackBtn.onclick = () => {
+    if (bibleView === "verses") renderBibleChapterGrid();
+    else if (bibleView === "chapters") renderBibleBooksList();
+  };
+
+  bibleTranslationSelect.onchange = () => {
+    if (bibleView === "verses") loadBibleVerses();
+  };
+
   loadTranslations();
   loadBackgroundPresets();
+  loadBibleBooks();
   connectWs();
 })();
