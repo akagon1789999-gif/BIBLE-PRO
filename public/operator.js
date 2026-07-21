@@ -34,6 +34,7 @@
   const bibleBrowserBody = document.getElementById("bibleBrowserBody");
   const obsStatusBadge = document.getElementById("obsStatusBadge");
   const obsScenesList = document.getElementById("obsScenesList");
+  const obsBgToggleBtn = document.getElementById("obsBgToggleBtn");
   const mediaTabs = document.getElementById("mediaTabs");
   const mediaSearchInput = document.getElementById("mediaSearchInput");
   const mediaUploadBtn = document.getElementById("mediaUploadBtn");
@@ -84,6 +85,7 @@
       if (msg.type === "clear") hidePreview();
       if (msg.type === "background") applyPreviewBackground(msg.background);
       if (msg.type === "playlist-position") applyPlaylistPosition(msg.currentId);
+      if (msg.type === "obs-background-toggle") applyObsBackgroundToggle(msg.enabled);
       if (msg.type === "stt-mode") applySttMode(msg.mode);
       if (msg.type === "error") {
         console.error(msg.message);
@@ -1289,6 +1291,14 @@
       console.error("Failed to load OBS status:", err);
     }
   }
+
+  function applyObsBackgroundToggle(enabled) {
+    obsBgToggleBtn.classList.toggle("active", Boolean(enabled));
+  }
+
+  obsBgToggleBtn.onclick = () => {
+    wsSend({ type: "obs-toggle-background", enabled: !obsBgToggleBtn.classList.contains("active") });
+  };
 
   function renderObsStatus(data) {
     obsStatusBadge.textContent = data.connected ? (data.recording ? "🔴 Recording" : "Connected") : "Disconnected";

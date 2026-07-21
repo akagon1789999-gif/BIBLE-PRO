@@ -5,17 +5,30 @@
 <title>OBS Overlay — Sofer 2.0</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  /* Deliberately no background color/image anywhere on this page — OBS's
-     Browser Source composites it with full transparency as long as nothing
-     here paints an opaque background. This page only ever shows text. */
+  /* No background color/image here by default — OBS's Browser Source
+     composites it with full transparency as long as nothing paints an
+     opaque background. Showing the Sofer background instead of the live
+     camera feed is opt-in, toggled from the operator console's OBS Control
+     panel (see obs.js's applyBackground). */
   html, body {
     margin: 0; height: 100%; color: #fff;
     font-family: Georgia, "Times New Roman", serif;
     display: flex; align-items: center; justify-content: center;
     overflow: hidden;
+    position: relative;
     background: transparent;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    transition: background-color 0.8s ease;
+  }
+  #bgVideo {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; z-index: 0; display: none;
   }
   #stage {
+    position: relative;
+    z-index: 1;
     width: 90vw;
     text-align: center;
     opacity: 0;
@@ -55,6 +68,7 @@
 </style>
 </head>
 <body>
+  <video id="bgVideo" muted loop playsinline></video>
   <div id="stage">
     <div id="panel">
       <div id="verseText"></div>

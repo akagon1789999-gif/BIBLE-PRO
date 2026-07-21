@@ -264,6 +264,7 @@
   }
   .obs-scene-btn:hover { border-color: var(--accent); }
   .obs-scene-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .obs-bg-toggle { display: block; width: 100%; margin-bottom: 8px; text-align: center; }
   #background-bar {
     display: flex; align-items: center; gap: 10px; padding: 10px 20px;
     background: var(--panel); border-bottom: 1px solid var(--border);
@@ -505,6 +506,10 @@
           <span>OBS Control</span>
           <span class="stt-mode-label" id="obsStatusBadge">Disconnected</span>
         </div>
+        <button class="obs-scene-btn obs-bg-toggle" id="obsBgToggleBtn" type="button"
+          title="Paint the current Sofer background behind the overlay text in OBS, instead of leaving it transparent over your camera">
+          Show background in OBS
+        </button>
         <div id="obsScenesList" class="obs-scenes-list"></div>
       </div>
     </section>

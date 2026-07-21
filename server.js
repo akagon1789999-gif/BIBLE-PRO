@@ -229,6 +229,9 @@ const displayClients = new Set();
 const operatorState = new Map(); // ws -> { session, pending: Map<id, suggestion>, recent: Map<key, ts> }
 let currentBackground = DEFAULT_BACKGROUND;
 let currentShow = null; // last {type:"show", ...} payload broadcast, or null if the display is cleared
+// Off by default: the OBS overlay is meant to sit transparently over a live
+// camera feed, so painting a background there is opt-in, not automatic.
+let obsShowBackground = false;
 let currentPlaylistItemId = null; // id of the playlist item last played, if any — operator-only, not sent to displays
 
 function send(ws, msg) {
@@ -568,6 +571,7 @@ wss.on("connection", (ws, req) => {
   if (role === "display") {
     displayClients.add(ws);
     send(ws, { type: "background", background: currentBackground });
+    send(ws, { type: "obs-background-toggle", enabled: obsShowBackground });
     if (currentShow) send(ws, currentShow);
     ws.on("close", () => displayClients.delete(ws));
     return;
@@ -588,6 +592,7 @@ wss.on("connection", (ws, req) => {
   };
   operatorState.set(ws, state);
   send(ws, { type: "background", background: currentBackground });
+  send(ws, { type: "obs-background-toggle", enabled: obsShowBackground });
   if (currentShow) send(ws, currentShow);
   send(ws, { type: "playlist-position", currentId: currentPlaylistItemId });
 
@@ -632,6 +637,12 @@ wss.on("connection", (ws, req) => {
 
     if (msg.type === "obs-switch-scene" && typeof msg.sceneName === "string") {
       obsClient.setScene(msg.sceneName).catch((err) => console.error("OBS scene switch failed:", err.message));
+      return;
+    }
+
+    if (msg.type === "obs-toggle-background") {
+      obsShowBackground = Boolean(msg.enabled);
+      broadcastState({ type: "obs-background-toggle", enabled: obsShowBackground });
       return;
     }
 

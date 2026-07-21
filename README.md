@@ -241,16 +241,19 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   a playlist item can never show anything those paths wouldn't otherwise
   allow, and can't go stale (a song or verse plays with whatever's
   currently in the database, not a frozen copy from when it was added).
-- **OBS overlay** (`public/obs.html`): a fully transparent page for
+- **OBS overlay** (`public/obs.html`): a transparent-by-default page for
   streaming — add it as an OBS **Browser Source** (`http://localhost:3000/obs.html`
   if OBS runs on the same machine) and it composites verse/custom-text
   directly over your camera feed, no black box behind it. It's wired to
   the exact same broadcasts the projector display uses — approve a verse
-  or project custom text as usual and both update together — but it
-  deliberately ignores background selection entirely (there's no
-  "background" here, your camera feed *is* the background) and uses a
+  or project custom text as usual and both update together — and uses a
   stronger text outline than the projector display, since legibility over
-  live video needs more contrast than over a still image/color.
+  live video needs more contrast than over a still image/color. Background
+  selection is ignored here by default (there's no "background" needed —
+  your camera feed *is* the background) unless you turn on **Show
+  background in OBS** in the OBS Control panel, which paints the current
+  Sofer background behind the text here too — useful for a dedicated
+  "Scripture" scene with no camera in it at all.
 - **OBS remote control** ([`lib/obsClient.js`](lib/obsClient.js)): connects
   to OBS's built-in WebSocket server (OBS 28+, no plugin needed) to (1)
   start/stop OBS recording automatically alongside **Start/Stop Listening**,
