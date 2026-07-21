@@ -136,6 +136,10 @@ function buildMenu() {
         { role: "quit" },
       ],
     },
+    // Without this, replacing the default app menu silently drops the
+    // standard Cmd/Ctrl+X/C/V key equivalents — paste stops working in
+    // every text field in the app, not just Settings.
+    { role: "editMenu" },
     {
       label: "Display",
       submenu: [
