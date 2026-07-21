@@ -1,4 +1,10 @@
 require("dotenv").config();
+// Node 18+ defaults to trying IPv6 first for DNS lookups, which fails as a
+// hard ENOTFOUND (not a graceful fallback to IPv4) on networks/environments
+// where IPv6 is broken or unconfigured — seen in practice inside Electron's
+// bundled Node specifically, surfacing as "Deepgram unreachable" even with
+// a valid key and working internet.
+require("dns").setDefaultResultOrder("ipv4first");
 const express = require("express");
 const http = require("http");
 const { WebSocketServer } = require("ws");
