@@ -18,6 +18,7 @@ const { BOOKS, bookById, findBookByAlias } = require("./lib/books");
 const { createBufferState, clearBuffer, findParaphraseMatch } = require("./lib/paraphraseMatcher");
 const deepgram = require("./lib/deepgramSession");
 const offlineWhisper = require("./lib/offlineWhisper");
+const obsClient = require("./lib/obsClient");
 const { sanitizeCustomTextHtml, normalizeFontSize } = require("./lib/richText");
 const sermonLog = require("./lib/sermonLog");
 const { buildTranscriptText, buildTranscriptPdf } = require("./lib/sermonExport");
@@ -95,6 +96,10 @@ app.get("/api/bible/chapter/:bookId/:chapter", async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: `Could not load chapter: ${err.message}` });
   }
+});
+
+app.get("/api/obs/status", async (req, res) => {
+  res.json(await obsClient.getStatus());
 });
 
 function exportFilename(ext) {
@@ -410,17 +415,24 @@ wss.on("connection", (ws, req) => {
     }
 
     if (msg.type === "start-audio") {
+      obsClient.startRecording().catch(() => {}); // best-effort — never blocks speech recognition starting
       await startDeepgramForOperator(ws, state);
       return;
     }
 
     if (msg.type === "stop-audio") {
+      obsClient.stopRecording().catch(() => {});
       stopDeepgramForOperator(state);
       return;
     }
 
     if (msg.type === "set-mode" && (msg.mode === "auto" || msg.mode === "manual")) {
       state.mode = msg.mode;
+      return;
+    }
+
+    if (msg.type === "obs-switch-scene" && typeof msg.sceneName === "string") {
+      obsClient.setScene(msg.sceneName).catch((err) => console.error("OBS scene switch failed:", err.message));
       return;
     }
 

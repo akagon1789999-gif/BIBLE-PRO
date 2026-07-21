@@ -31,6 +31,8 @@
   const bibleBackBtn = document.getElementById("bibleBackBtn");
   const bibleBreadcrumbLabel = document.getElementById("bibleBreadcrumbLabel");
   const bibleBrowserBody = document.getElementById("bibleBrowserBody");
+  const obsStatusBadge = document.getElementById("obsStatusBadge");
+  const obsScenesList = document.getElementById("obsScenesList");
 
   let ws = null;
   let mediaStream = null;
@@ -739,8 +741,53 @@
     if (bibleView === "verses") loadBibleVerses();
   };
 
+  // --- OBS Control: connection/recording status + click-to-switch scenes.
+  // Polled over REST rather than pushed over the WS broadcast — unlike verse/
+  // background state, this isn't something multiple operators need to agree
+  // on, it's a side-channel to one local OBS instance.
+  const OBS_POLL_MS = 8000;
+
+  async function loadObsStatus() {
+    try {
+      const res = await fetch("/api/obs/status");
+      renderObsStatus(await res.json());
+    } catch (err) {
+      console.error("Failed to load OBS status:", err);
+    }
+  }
+
+  function renderObsStatus(data) {
+    obsStatusBadge.textContent = data.connected ? (data.recording ? "🔴 Recording" : "Connected") : "Disconnected";
+    obsStatusBadge.classList.toggle("connected", data.connected);
+    obsStatusBadge.classList.toggle("offline", !data.connected);
+
+    if (!data.scenes.length) {
+      obsScenesList.innerHTML = data.connected
+        ? '<div class="empty" style="padding:4px 0">No scenes found.</div>'
+        : '<div class="empty" style="padding:4px 0">Not connected — see README for OBS WebSocket setup.</div>';
+      return;
+    }
+    obsScenesList.innerHTML = data.scenes
+      .map(
+        (s) =>
+          `<button class="obs-scene-btn${s === data.currentScene ? " active" : ""}" data-scene="${escapeHtml(s)}">${escapeHtml(s)}</button>`
+      )
+      .join("");
+    obsScenesList.querySelectorAll(".obs-scene-btn").forEach((el) => {
+      el.onclick = () => {
+        wsSend({ type: "obs-switch-scene", sceneName: el.dataset.scene });
+        obsScenesList.querySelectorAll(".obs-scene-btn").forEach((b) => b.classList.remove("active"));
+        el.classList.add("active");
+        setTimeout(loadObsStatus, 600); // confirm against real OBS state shortly after
+      };
+    });
+  }
+
+  setInterval(loadObsStatus, OBS_POLL_MS);
+
   loadTranslations();
   loadBackgroundPresets();
   loadBibleBooks();
+  loadObsStatus();
   connectWs();
 })();

@@ -208,6 +208,27 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   "background" here, your camera feed *is* the background) and uses a
   stronger text outline than the projector display, since legibility over
   live video needs more contrast than over a still image/color.
+- **OBS remote control** ([`lib/obsClient.js`](lib/obsClient.js)): connects
+  to OBS's built-in WebSocket server (OBS 28+, no plugin needed) to (1)
+  start/stop OBS recording automatically alongside **Start/Stop Listening**,
+  and (2) let you switch OBS scenes from an **OBS Control** panel (below
+  Bible Browser) — it lists your real scene names from OBS itself and
+  highlights the current one. Like offline STT fallback, this only makes
+  sense when OBS runs on the same machine/network as this server, and every
+  call is defensive: if OBS isn't running or isn't configured, nothing here
+  ever interrupts speech recognition or verse projection — it just quietly
+  shows "Disconnected" and the recording/scene calls silently no-op.
+  **Setup**, once per machine: in OBS, go to **Tools → WebSocket Server
+  Settings**, check **Enable WebSocket server**, and either note the port
+  (default `4455`) and password, or uncheck **Enable Authentication** for a
+  simpler local setup. Then set in `.env`:
+  ```
+  OBS_WEBSOCKET_URL=ws://127.0.0.1:4455
+  OBS_WEBSOCKET_PASSWORD=your-obs-websocket-password
+  ```
+  (Omit `OBS_WEBSOCKET_PASSWORD` entirely if you disabled authentication.)
+  Restart the server after changing either — the OBS Control panel updates
+  itself automatically once connected, no other setup needed.
 
 ## Setup
 
@@ -287,6 +308,10 @@ Then open, on the same laptop:
   Offline fallback above. Re-run `npm run setup:offline-stt` after changing.
 - `MOTION_BACKGROUNDS_DIR` — folder scanned for video backgrounds (default
   `/Users/theunitychurch/Documents/STUDIO/images`)
+- `OBS_WEBSOCKET_URL` — OBS's WebSocket server address (default
+  `ws://127.0.0.1:4455`) — see OBS remote control above.
+- `OBS_WEBSOCKET_PASSWORD` — OBS's WebSocket password, if authentication is
+  enabled (omit entirely if you disabled it in OBS's settings).
 
 ## Current scope / what's next
 

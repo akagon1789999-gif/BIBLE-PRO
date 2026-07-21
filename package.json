@@ -13,6 +13,7 @@
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
     "multer": "^2.2.0",
+    "obs-websocket-js": "^5.0.8",
     "pdfkit": "^0.19.1",
     "sanitize-html": "^2.17.6",
     "ws": "^8.18.0"

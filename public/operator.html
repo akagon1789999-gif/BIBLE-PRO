@@ -229,6 +229,15 @@
     color: var(--text); cursor: pointer; padding: 4px 8px; font-size: 12px;
   }
   .bible-verse-project:hover { border-color: var(--accent); color: var(--accent); }
+  .obs-panel { border-top: 1px solid var(--border); padding: 10px 16px; }
+  .obs-panel .panel-title { padding: 0 0 8px; border-bottom: none; }
+  .obs-scenes-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .obs-scene-btn {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+  .obs-scene-btn:hover { border-color: var(--accent); }
+  .obs-scene-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
   #background-bar {
     display: flex; align-items: center; gap: 10px; padding: 10px 20px;
     background: var(--panel); border-bottom: 1px solid var(--border);
@@ -250,6 +259,7 @@
     background: var(--panel-2); color: var(--muted);
   }
   .stt-mode-label.offline { background: rgba(231, 76, 60, 0.18); color: #ff8a7a; }
+  .stt-mode-label.connected { background: rgba(46, 204, 113, 0.18); color: #6bdb9a; }
 </style>
 </head>
 <body>
@@ -339,6 +349,13 @@
         <span id="bibleBreadcrumbLabel">Old &amp; New Testament</span>
       </div>
       <div id="bibleBrowserBody" class="bible-browser-body"></div>
+      <div class="obs-panel">
+        <div class="panel-title panel-title-row">
+          <span>OBS Control</span>
+          <span class="stt-mode-label" id="obsStatusBadge">Disconnected</span>
+        </div>
+        <div id="obsScenesList" class="obs-scenes-list"></div>
+      </div>
     </section>
   </main>
   <script src="operator.js"></script>
