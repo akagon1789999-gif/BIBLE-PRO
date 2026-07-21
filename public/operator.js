@@ -1404,6 +1404,53 @@
 
   setInterval(loadObsStatus, OBS_POLL_MS);
 
+  // --- Panel collapse: with six columns (Live Transcript, Verse
+  // Suggestions/Preview, Bible Browser, Media Library, Song Library,
+  // Service Playlist), screen space runs out fast. The four utility panels
+  // can collapse to a narrow strip so whichever panels are actually in use
+  // during a service get more room — state persists across reloads.
+  const COLLAPSIBLE_PANELS = ["bible", "media", "song", "playlist"];
+  const PANEL_WIDTHS = { bible: "320px", media: "320px", song: "320px", playlist: "320px" };
+  const COLLAPSE_STORAGE_KEY = "sofer-collapsed-panels";
+  const mainGrid = document.getElementById("mainGrid");
+
+  function loadCollapsedSet() {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(COLLAPSE_STORAGE_KEY) || "[]"));
+    } catch {
+      return new Set();
+    }
+  }
+
+  function applyGridColumns(collapsed) {
+    const columns = ["1fr", "380px", ...COLLAPSIBLE_PANELS.map((p) => (collapsed.has(p) ? "44px" : PANEL_WIDTHS[p]))];
+    mainGrid.style.gridTemplateColumns = columns.join(" ");
+  }
+
+  function setPanelCollapsed(panel, isCollapsed, collapsed) {
+    const section = document.querySelector(`section[data-panel="${panel}"]`);
+    const btn = section.querySelector("[data-collapse-toggle]");
+    section.classList.toggle("collapsed", isCollapsed);
+    btn.textContent = isCollapsed ? "›" : "‹";
+    btn.title = isCollapsed ? "Expand this panel" : "Collapse this panel";
+    if (isCollapsed) collapsed.add(panel);
+    else collapsed.delete(panel);
+  }
+
+  const collapsedPanels = loadCollapsedSet();
+  COLLAPSIBLE_PANELS.forEach((panel) => setPanelCollapsed(panel, collapsedPanels.has(panel), collapsedPanels));
+  applyGridColumns(collapsedPanels);
+
+  document.querySelectorAll("[data-collapse-toggle]").forEach((btn) => {
+    const section = btn.closest("section[data-panel]");
+    const panel = section.dataset.panel;
+    btn.onclick = () => {
+      setPanelCollapsed(panel, !section.classList.contains("collapsed"), collapsedPanels);
+      applyGridColumns(collapsedPanels);
+      localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify([...collapsedPanels]));
+    };
+  });
+
   loadTranslations();
   loadBackgroundPresets();
   loadBibleBooks();

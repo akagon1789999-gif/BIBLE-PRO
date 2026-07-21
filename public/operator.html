@@ -99,7 +99,23 @@
     padding: 10px 16px; font-size: 12px; text-transform: uppercase;
     letter-spacing: 0.06em; color: var(--muted); border-bottom: 1px solid var(--border);
   }
-  .panel-title-row { display: flex; align-items: center; justify-content: space-between; }
+  .panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .panel-collapse-btn {
+    width: 20px; height: 20px; padding: 0; border-radius: 4px; background: var(--panel-2);
+    border: 1px solid var(--border); color: var(--muted); font-size: 13px; cursor: pointer;
+    flex-shrink: 0; line-height: 1; display: flex; align-items: center; justify-content: center;
+  }
+  .panel-collapse-btn:hover { border-color: var(--accent); color: var(--text); }
+  section.collapsed { min-width: 0; }
+  section.collapsed > *:not(.panel-title-row) { display: none; }
+  section.collapsed .panel-title-row {
+    flex-direction: column; height: 100%; padding: 16px 0; gap: 12px;
+    justify-content: flex-start; align-items: center; border-bottom: none;
+  }
+  section.collapsed .panel-title-row > *:not(:first-child):not(.panel-collapse-btn) { display: none; }
+  section.collapsed .panel-title-row > span:first-child {
+    writing-mode: vertical-rl; text-orientation: mixed; white-space: nowrap;
+  }
   .export-links { display: flex; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); }
   .export-links a { color: var(--accent); text-decoration: none; font-size: 12px; }
   .export-links a:hover { text-decoration: underline; }
@@ -444,7 +460,7 @@
       style="display:none"
     />
   </div>
-  <main>
+  <main id="mainGrid">
     <section>
       <div class="panel-title">Live Transcript</div>
       <div id="transcript"><span class="interim">Waiting for speech…</span></div>
@@ -495,10 +511,11 @@
         </div>
       </div>
     </section>
-    <section>
+    <section data-panel="bible">
       <div class="panel-title panel-title-row">
         <span>Bible Browser</span>
         <select id="bibleTranslationSelect" class="translation-select translation-select-mini"></select>
+        <button class="panel-collapse-btn" data-collapse-toggle title="Collapse this panel">‹</button>
       </div>
       <div class="bible-breadcrumb">
         <button class="btn-neutral bible-back" id="bibleBackBtn" style="display:none">‹ Back</button>
@@ -517,8 +534,11 @@
         <div id="obsScenesList" class="obs-scenes-list"></div>
       </div>
     </section>
-    <section>
-      <div class="panel-title">Media Library</div>
+    <section data-panel="media">
+      <div class="panel-title panel-title-row">
+        <span>Media Library</span>
+        <button class="panel-collapse-btn" data-collapse-toggle title="Collapse this panel">‹</button>
+      </div>
       <div id="mediaTabs" class="media-tabs"></div>
       <div class="media-toolbar">
         <input type="text" id="mediaSearchInput" class="media-search" placeholder="Search…" />
@@ -527,20 +547,22 @@
       </div>
       <div id="mediaGrid" class="media-grid"></div>
     </section>
-    <section>
+    <section data-panel="song">
       <div class="panel-title panel-title-row">
         <span>Song Library</span>
         <button class="btn-neutral" id="songAddBtn" style="padding:4px 10px;font-size:12px;">+ Add Song</button>
+        <button class="panel-collapse-btn" data-collapse-toggle title="Collapse this panel">‹</button>
       </div>
       <div class="song-search-bar">
         <input type="text" id="songSearchInput" class="media-search" placeholder="Search songs…" />
       </div>
       <div id="songBody" class="song-body"></div>
     </section>
-    <section>
+    <section data-panel="playlist">
       <div class="panel-title panel-title-row">
         <span>Service Playlist</span>
         <button class="btn-neutral" id="playlistSaveAsBtn" style="padding:4px 10px;font-size:12px;">Save As…</button>
+        <button class="panel-collapse-btn" data-collapse-toggle title="Collapse this panel">‹</button>
       </div>
       <div class="playlist-load-row">
         <select id="savedPlaylistSelect">
