@@ -196,6 +196,30 @@ app.delete("/api/playlist/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/api/playlist/saved", (req, res) => {
+  res.json({ playlists: playlist.listSavedPlaylists() });
+});
+
+app.post("/api/playlist/saved", express.json(), (req, res) => {
+  try {
+    const saved = playlist.savePlaylistAs(req.body?.name);
+    res.status(201).json({ saved });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post("/api/playlist/saved/:id/load", (req, res) => {
+  const items = playlist.loadSavedPlaylist(req.params.id);
+  if (!items) return res.status(404).json({ error: "Saved playlist not found." });
+  res.json({ items });
+});
+
+app.delete("/api/playlist/saved/:id", (req, res) => {
+  if (!playlist.deleteSavedPlaylist(req.params.id)) return res.status(404).json({ error: "Saved playlist not found." });
+  res.json({ ok: true });
+});
+
 function exportFilename(ext) {
   const stamp = new Date().toISOString().slice(0, 10);
   return `sermon-${stamp}.${ext}`;

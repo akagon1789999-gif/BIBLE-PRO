@@ -241,6 +241,11 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   a playlist item can never show anything those paths wouldn't otherwise
   allow, and can't go stale (a song or verse plays with whatever's
   currently in the database, not a frozen copy from when it was added).
+  There's one live working playlist at a time, but you can snapshot it
+  under a name with **Save As…** and reload it later from the dropdown
+  above the list — loading **replaces** whatever's currently live, so
+  build recurring service structures ("Sunday AM", "Wednesday PM") once
+  and reload them each week rather than rebuilding from scratch.
 - **OBS overlay** (`public/obs.html`): a transparent-by-default page for
   streaming — add it as an OBS **Browser Source** (`http://localhost:3000/obs.html`
   if OBS runs on the same machine) and it composites verse/custom-text

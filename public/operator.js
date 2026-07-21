@@ -45,6 +45,9 @@
   const songBody = document.getElementById("songBody");
   const playlistStrip = document.getElementById("playlistStrip");
   const playlistList = document.getElementById("playlistList");
+  const playlistSaveAsBtn = document.getElementById("playlistSaveAsBtn");
+  const savedPlaylistSelect = document.getElementById("savedPlaylistSelect");
+  const savedPlaylistDeleteBtn = document.getElementById("savedPlaylistDeleteBtn");
 
   let ws = null;
   let mediaStream = null;
@@ -1115,6 +1118,78 @@
     });
   }
 
+  async function loadSavedPlaylistOptions() {
+    try {
+      const res = await fetch("/api/playlist/saved");
+      const data = await res.json();
+      const playlists = data.playlists || [];
+      savedPlaylistSelect.innerHTML =
+        '<option value="">Load saved playlist…</option>' +
+        playlists
+          .map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (${p.itemCount})</option>`)
+          .join("");
+      savedPlaylistDeleteBtn.disabled = true;
+    } catch (err) {
+      console.error("Failed to load saved playlists:", err);
+    }
+  }
+
+  playlistSaveAsBtn.onclick = async () => {
+    const name = prompt("Save current playlist as:");
+    if (!name || !name.trim()) return;
+    try {
+      const res = await fetch("/api/playlist/saved", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Save failed.");
+      await loadSavedPlaylistOptions();
+    } catch (err) {
+      alert("Could not save playlist: " + err.message);
+    }
+  };
+
+  savedPlaylistSelect.onchange = () => {
+    savedPlaylistDeleteBtn.disabled = !savedPlaylistSelect.value;
+  };
+
+  savedPlaylistSelect.addEventListener("change", async () => {
+    const id = savedPlaylistSelect.value;
+    if (!id) return;
+    const name = savedPlaylistSelect.selectedOptions[0].textContent;
+    if (!confirm(`Load "${name}"? This replaces your current playlist.`)) {
+      savedPlaylistSelect.value = "";
+      savedPlaylistDeleteBtn.disabled = true;
+      return;
+    }
+    try {
+      const res = await fetch(`/api/playlist/saved/${id}/load`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Load failed.");
+      playlistItems = data.items;
+      renderPlaylistStrip();
+      renderPlaylistList();
+    } catch (err) {
+      alert("Could not load playlist: " + err.message);
+    }
+  });
+
+  savedPlaylistDeleteBtn.onclick = async () => {
+    const id = savedPlaylistSelect.value;
+    if (!id) return;
+    const name = savedPlaylistSelect.selectedOptions[0].textContent;
+    if (!confirm(`Delete saved playlist "${name}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/playlist/saved/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error || "Delete failed.");
+      await loadSavedPlaylistOptions();
+    } catch (err) {
+      alert("Could not delete saved playlist: " + err.message);
+    }
+  };
+
   async function movePlaylistItem(fromIndex, toIndex) {
     if (toIndex < 0 || toIndex >= playlistItems.length) return;
     const ids = playlistItems.map((i) => i.id);
@@ -1337,5 +1412,6 @@
   loadMediaAssets();
   loadSongs();
   loadPlaylist();
+  loadSavedPlaylistOptions();
   connectWs();
 })();

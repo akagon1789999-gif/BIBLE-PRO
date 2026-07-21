@@ -408,6 +408,12 @@
     width: 20px; height: 20px; padding: 0; border-radius: 50%; background: var(--panel);
     border: 1px solid var(--border); color: var(--text); font-size: 12px; cursor: pointer; flex-shrink: 0;
   }
+  .playlist-load-row { display: flex; gap: 6px; align-items: center; padding: 8px 12px 0; }
+  .playlist-load-row select {
+    flex: 1; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px;
+  }
+  .playlist-load-row .playlist-item-delete:disabled { opacity: 0.3; cursor: default; }
 </style>
 </head>
 <body>
@@ -534,7 +540,16 @@
       <div id="songBody" class="song-body"></div>
     </section>
     <section>
-      <div class="panel-title">Service Playlist</div>
+      <div class="panel-title panel-title-row">
+        <span>Service Playlist</span>
+        <button class="btn-neutral" id="playlistSaveAsBtn" style="padding:4px 10px;font-size:12px;">Save As…</button>
+      </div>
+      <div class="playlist-load-row">
+        <select id="savedPlaylistSelect">
+          <option value="">Load saved playlist…</option>
+        </select>
+        <button class="playlist-item-delete" id="savedPlaylistDeleteBtn" title="Delete selected saved playlist" disabled>×</button>
+      </div>
       <div id="playlistStrip" class="playlist-strip"></div>
       <div id="playlistList" class="playlist-list"></div>
     </section>
