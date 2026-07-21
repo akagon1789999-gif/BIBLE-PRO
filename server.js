@@ -43,7 +43,10 @@ const SUGGESTION_DEDUPE_MS = 20 * 1000;
 // reconnect attempts while in offline fallback.
 const HEALTH_CHECK_INTERVAL_MS = 20 * 1000;
 
-const uploadsDir = path.join(__dirname, "public", "uploads");
+// Configurable so the Electron build can redirect this outside app.asar,
+// which is a read-only archive at runtime — mkdirSync/multer writes into
+// it would fail (see electron/main.js).
+const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, "public", "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
 
 const IMAGE_MIME_RE = /^image\/(png|jpe?g|webp|gif)$/;
@@ -63,6 +66,9 @@ const upload = multer({
 
 const app = express();
 app.use(express.static(path.join(__dirname, "public")));
+// Explicit mount (in addition to the public/ static mount above) so
+// uploads still serve correctly when UPLOADS_DIR points outside public/.
+app.use("/uploads", express.static(uploadsDir));
 app.use(MOTION_URL_PREFIX, express.static(MOTION_DIR));
 
 app.get("/api/backgrounds", (req, res) => {

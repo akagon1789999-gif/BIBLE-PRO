@@ -38,11 +38,13 @@ if (config.deepgramApiKey) process.env.DEEPGRAM_API_KEY = config.deepgramApiKey;
 if (config.obsWebsocketUrl) process.env.OBS_WEBSOCKET_URL = config.obsWebsocketUrl;
 if (config.obsWebsocketPassword) process.env.OBS_WEBSOCKET_PASSWORD = config.obsWebsocketPassword;
 
-// Both of these default to locations relative to the installed app's own
-// files, which are read-only (or simply gone) once packaged — redirect
-// them into the OS-appropriate per-user app-data directory instead.
+// All three default to locations relative to the installed app's own
+// files, which live inside the read-only app.asar archive once packaged —
+// mkdirSync/file writes there fail at runtime, so redirect them into the
+// OS-appropriate per-user app-data directory instead.
 process.env.MOTION_BACKGROUNDS_DIR = config.motionBackgroundsDir || path.join(app.getPath("userData"), "motion-backgrounds");
 process.env.DB_PATH = process.env.DB_PATH || path.join(app.getPath("userData"), "app.db");
+process.env.UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(app.getPath("userData"), "uploads");
 fs.mkdirSync(process.env.MOTION_BACKGROUNDS_DIR, { recursive: true });
 
 require(path.join(__dirname, "..", "server.js"));
