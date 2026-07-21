@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Operator Console — Projector Bible</title>
+<title>Operator Console — Sofer 2.0</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="manifest" href="/manifest-operator.json" />
 <meta name="theme-color" content="#4f8cff" />
 <link rel="icon" href="/icons/icon-192.png" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-title" content="Operator" />
+<meta name="apple-mobile-web-app-title" content="Sofer Operator" />
 <style>
   :root {
     --bg: #0f1115;
@@ -41,6 +41,7 @@
     border-bottom: 1px solid var(--border);
   }
   header h1 { font-size: 16px; margin: 0; font-weight: 600; flex: 1; }
+  .app-logo { height: 26px; width: 26px; border-radius: 6px; background: white; padding: 2px; }
   .status-dot {
     width: 10px; height: 10px; border-radius: 50%;
     background: var(--bad); display: inline-block; margin-right: 6px;
@@ -391,7 +392,8 @@
 <body>
   <header>
     <span class="status-dot" id="statusDot"></span>
-    <h1>Projector Bible — Operator Console</h1>
+    <img class="app-logo" src="/icons/icon-192.png" alt="Sofer 2.0" />
+    <h1>Sofer 2.0 — Operator Console</h1>
     <span class="stt-mode-label" id="sttModeLabel" style="display:none"></span>
     <div class="mode-toggle" role="group" aria-label="Approval mode">
       <button type="button" class="mode-btn active" id="modeManualBtn" title="Suggestions wait for your Approve click">Manual</button>

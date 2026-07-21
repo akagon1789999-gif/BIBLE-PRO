@@ -1,7 +1,7 @@
 {
-  "name": "Projector Bible — Operator",
-  "short_name": "Operator",
-  "description": "AI-powered Scripture Projection Assistant — operator console",
+  "name": "Sofer 2.0 — Operator",
+  "short_name": "Sofer Operator",
+  "description": "Sofer 2.0 — AI-powered church presentation app: operator console",
   "start_url": "/operator.html",
   "scope": "/",
   "display": "standalone",

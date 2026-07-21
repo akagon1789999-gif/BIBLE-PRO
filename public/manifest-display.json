@@ -1,7 +1,7 @@
 {
-  "name": "Projector Bible — Display",
-  "short_name": "Display",
-  "description": "AI-powered Scripture Projection Assistant — projector output",
+  "name": "Sofer 2.0 — Display",
+  "short_name": "Sofer Display",
+  "description": "Sofer 2.0 — AI-powered church presentation app: projector output",
   "start_url": "/display.html",
   "scope": "/",
   "display": "fullscreen",

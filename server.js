@@ -760,7 +760,7 @@ wss.on("connection", (ws, req) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Projector Bible server running at http://localhost:${PORT}`);
+  console.log(`Sofer 2.0 server running at http://localhost:${PORT}`);
   console.log(`  Operator console: http://localhost:${PORT}/operator.html`);
   console.log(`  Display output:   http://localhost:${PORT}/display.html`);
   console.log(`  Database:         ${db.name}`);

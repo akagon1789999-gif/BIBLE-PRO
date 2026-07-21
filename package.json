@@ -1,7 +1,7 @@
 {
-  "name": "projector-bible",
+  "name": "sofer-2.0",
   "version": "0.1.0",
-  "description": "AI-powered Scripture Projection Assistant: listens to a sermon, detects Bible references, and lets an operator approve verses for projector display.",
+  "description": "Sofer 2.0 — AI-powered church presentation app: live sermon transcription with Scripture detection, a song and media library, and a service playlist, all projected from one operator console.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

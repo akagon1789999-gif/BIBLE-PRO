@@ -1,9 +1,11 @@
-# Projector Bible
+# Sofer 2.0
 
-An AI-powered Scripture Projection Assistant. It listens to a pastor's live
-speech, detects Bible references as they're spoken, looks the verse up, and
-lets an operator approve it with one click before it appears on the
-projector/TV.
+An AI-powered church presentation app. It listens to a pastor's live speech,
+detects Bible references as they're spoken, looks the verse up, and lets an
+operator approve it with one click before it appears on the projector/TV —
+alongside a song library, a media library (backgrounds, motion graphics,
+logos, lower thirds), and a service playlist to plan and step through the
+whole service from one operator console.
 
 ## How it works
 
