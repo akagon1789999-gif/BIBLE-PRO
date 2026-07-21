@@ -33,6 +33,11 @@
   const bibleBrowserBody = document.getElementById("bibleBrowserBody");
   const obsStatusBadge = document.getElementById("obsStatusBadge");
   const obsScenesList = document.getElementById("obsScenesList");
+  const mediaTabs = document.getElementById("mediaTabs");
+  const mediaSearchInput = document.getElementById("mediaSearchInput");
+  const mediaUploadBtn = document.getElementById("mediaUploadBtn");
+  const mediaFileInput = document.getElementById("mediaFileInput");
+  const mediaGrid = document.getElementById("mediaGrid");
 
   let ws = null;
   let mediaStream = null;
@@ -568,14 +573,25 @@
     bgSwatchesEl.appendChild(div);
   }
 
+  // Re-run after every background/motion upload or delete (from either the
+  // quick bar below or the Media Library panel) so the swatch bar always
+  // reflects the persisted catalog, not just whatever this tab appended.
   async function loadBackgroundPresets() {
     try {
       const res = await fetch("/api/backgrounds");
       const data = await res.json();
+      bgSwatchesEl.innerHTML = "";
       (data.presets || []).forEach((preset) => {
         const background = { type: "preset", id: preset.id, css: preset.css };
         bgSwatchesEl.appendChild(renderSwatch(background, preset.label));
       });
+      if ((data.uploads || []).length) {
+        addDivider();
+        data.uploads.forEach((upload) => {
+          const background = { type: upload.type, url: upload.url };
+          bgSwatchesEl.appendChild(renderSwatch(background, upload.label));
+        });
+      }
       if ((data.motion || []).length) {
         addDivider();
         data.motion.forEach((motion) => {
@@ -600,15 +616,151 @@
       const res = await fetch("/api/backgrounds/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
-      const background = { type: data.type, url: data.url };
-      bgSwatchesEl.appendChild(renderSwatch(background, file.name));
-      selectBackground(background);
+      await loadBackgroundPresets();
+      selectBackground({ type: data.type, url: data.url });
+      refreshMediaGridIfShowing(["background", "motion"]);
     } catch (err) {
       alert("Background upload failed: " + err.message);
     } finally {
       bgUploadBtn.disabled = false;
       bgUploadBtn.textContent = "Upload Image/Video";
       bgFileInput.value = "";
+    }
+  };
+
+  // --- Media Library: catalog of Backgrounds / Motion Graphics / Logos /
+  // Lower Thirds, backed by lib/mediaLibrary.js. Backgrounds and Motion
+  // Graphics are click-to-project (same selectBackground flow as the quick
+  // swatch bar above); Logos and Lower Thirds are catalog/manage only for
+  // now — projecting them is a later phase.
+  const MEDIA_CATEGORIES = [
+    { id: "background", label: "Backgrounds", clickable: true },
+    { id: "motion", label: "Motion Graphics", clickable: true },
+    { id: "logo", label: "Logos", clickable: false },
+    { id: "lower_third", label: "Lower Thirds", clickable: false },
+  ];
+  let mediaActiveCategory = MEDIA_CATEGORIES[0].id;
+
+  function renderMediaTabs() {
+    mediaTabs.innerHTML = "";
+    MEDIA_CATEGORIES.forEach((cat) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `media-tab${cat.id === mediaActiveCategory ? " active" : ""}`;
+      btn.textContent = cat.label;
+      btn.onclick = () => {
+        mediaActiveCategory = cat.id;
+        renderMediaTabs();
+        loadMediaAssets();
+      };
+      mediaTabs.appendChild(btn);
+    });
+  }
+
+  function activeMediaCategoryConfig() {
+    return MEDIA_CATEGORIES.find((c) => c.id === mediaActiveCategory);
+  }
+
+  function renderMediaTile(asset, clickable) {
+    const tile = document.createElement(clickable ? "button" : "div");
+    tile.className = `media-tile${clickable ? " clickable" : ""}`;
+    if (clickable) tile.type = "button";
+    if (asset.kind === "video") {
+      const video = document.createElement("video");
+      video.src = asset.url;
+      video.muted = true;
+      video.loop = true;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.play().catch(() => {});
+      tile.appendChild(video);
+    } else {
+      const img = document.createElement("img");
+      img.src = asset.url;
+      img.alt = asset.label;
+      tile.appendChild(img);
+    }
+    const label = document.createElement("span");
+    label.className = "media-tile-label";
+    label.textContent = asset.label;
+    tile.appendChild(label);
+    if (asset.deletable) {
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "media-tile-delete";
+      del.title = "Delete";
+      del.textContent = "×";
+      del.onclick = async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete "${asset.label}"?`)) return;
+        try {
+          const res = await fetch(`/api/media/${encodeURIComponent(asset.id)}`, { method: "DELETE" });
+          if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
+          loadMediaAssets();
+          if (asset.category === "background" || asset.category === "motion") loadBackgroundPresets();
+        } catch (err) {
+          alert("Delete failed: " + err.message);
+        }
+      };
+      tile.appendChild(del);
+    }
+    if (clickable) {
+      tile.onclick = () => selectBackground({ type: asset.kind === "video" ? "video" : "image", url: asset.url });
+    }
+    return tile;
+  }
+
+  async function loadMediaAssets() {
+    const cat = activeMediaCategoryConfig();
+    mediaGrid.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      const params = mediaSearchInput.value.trim() ? `?search=${encodeURIComponent(mediaSearchInput.value.trim())}` : "";
+      const res = await fetch(`/api/media/${cat.id}${params}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load media.");
+      mediaGrid.innerHTML = "";
+      if (!data.assets.length) {
+        mediaGrid.innerHTML = '<div class="empty">No assets yet.</div>';
+        return;
+      }
+      data.assets.forEach((asset) => mediaGrid.appendChild(renderMediaTile(asset, cat.clickable)));
+    } catch (err) {
+      mediaGrid.innerHTML = '<div class="empty">Could not load media.</div>';
+      console.error("Failed to load media assets:", err);
+    }
+  }
+
+  function refreshMediaGridIfShowing(categories) {
+    if (categories.includes(mediaActiveCategory)) loadMediaAssets();
+  }
+
+  let mediaSearchDebounce;
+  mediaSearchInput.addEventListener("input", () => {
+    clearTimeout(mediaSearchDebounce);
+    mediaSearchDebounce = setTimeout(loadMediaAssets, 250);
+  });
+
+  mediaUploadBtn.onclick = () => mediaFileInput.click();
+  mediaFileInput.onchange = async () => {
+    const file = mediaFileInput.files[0];
+    if (!file) return;
+    const cat = activeMediaCategoryConfig();
+    const formData = new FormData();
+    formData.append("file", file);
+    mediaUploadBtn.disabled = true;
+    mediaUploadBtn.textContent = "Uploading…";
+    try {
+      const res = await fetch(`/api/media/${cat.id}/upload`, { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      loadMediaAssets();
+      if (cat.id === "background" || cat.id === "motion") loadBackgroundPresets();
+    } catch (err) {
+      alert("Upload failed: " + err.message);
+    } finally {
+      mediaUploadBtn.disabled = false;
+      mediaUploadBtn.textContent = "Upload";
+      mediaFileInput.value = "";
     }
   };
 
@@ -789,5 +941,7 @@
   loadBackgroundPresets();
   loadBibleBooks();
   loadObsStatus();
+  renderMediaTabs();
+  loadMediaAssets();
   connectWs();
 })();

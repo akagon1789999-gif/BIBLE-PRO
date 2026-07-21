@@ -140,7 +140,20 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   upload a video directly from the operator console (up to 1GB, MP4/WEBM/MOV).
   Uploaded videos land in `public/uploads/` (gitignored); library videos are
   served straight from their original folder, so nothing gets duplicated on
-  disk.
+  disk. Uploaded backgrounds/motion graphics are recorded in the SQLite
+  catalog (see Media Library below), so they survive a page refresh or
+  server restart — they used to only exist for the current browser session.
+- **Media Library**: [`lib/mediaLibrary.js`](lib/mediaLibrary.js) — a
+  SQLite-backed asset catalog (`media_assets` table) with a panel in the
+  operator console for browsing, searching, uploading, and deleting assets
+  across four categories: Backgrounds, Motion Graphics, Logos, and Lower
+  Thirds. Backgrounds and Motion Graphics tiles are click-to-project (same
+  flow as the swatch bar); Logos and Lower Thirds are catalog/manage only
+  for now — projecting them onto the display is a later phase. Deleting an
+  asset removes both its database row and its file in `public/uploads/`;
+  folder-scanned motion videos (from `MOTION_BACKGROUNDS_DIR`) appear
+  alongside uploads but aren't deletable from here since this app doesn't
+  own that folder.
 - **Operator preview**: the operator console shows a small live preview of
   exactly what's on the projector — same background, same verse text. The
   server (not the browser) is the source of truth for "what's currently
@@ -312,6 +325,9 @@ Then open, on the same laptop:
   `ws://127.0.0.1:4455`) — see OBS remote control above.
 - `OBS_WEBSOCKET_PASSWORD` — OBS's WebSocket password, if authentication is
   enabled (omit entirely if you disabled it in OBS's settings).
+- `DB_PATH` — SQLite database file path (default `data/app.db`). **On
+  Railway, this file will not survive a redeploy unless a Volume is
+  attached and `DB_PATH` points inside its mount path.**
 
 ## Current scope / what's next
 

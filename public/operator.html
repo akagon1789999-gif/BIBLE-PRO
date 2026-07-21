@@ -68,7 +68,7 @@
   main {
     flex: 1;
     display: grid;
-    grid-template-columns: 1fr 380px 320px;
+    grid-template-columns: 1fr 380px 320px 320px;
     gap: 1px;
     background: var(--border);
     overflow: hidden;
@@ -260,6 +260,43 @@
   }
   .stt-mode-label.offline { background: rgba(231, 76, 60, 0.18); color: #ff8a7a; }
   .stt-mode-label.connected { background: rgba(46, 204, 113, 0.18); color: #6bdb9a; }
+  .media-tabs { display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .media-tab {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; font-weight: 600;
+  }
+  .media-tab:hover { color: var(--text); }
+  .media-tab.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .media-toolbar { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .media-search {
+    flex: 1; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 12px; min-width: 0;
+  }
+  .media-upload-btn { font-size: 12px; padding: 6px 10px; white-space: nowrap; }
+  .media-grid {
+    flex: 1; overflow-y: auto; padding: 10px; display: grid;
+    grid-template-columns: repeat(2, 1fr); gap: 10px; align-content: start;
+  }
+  .media-tile {
+    position: relative; border-radius: 8px; overflow: hidden; border: 2px solid var(--border);
+    aspect-ratio: 1; background: var(--panel-2); padding: 0;
+  }
+  .media-tile.clickable { cursor: pointer; }
+  .media-tile.clickable:hover { border-color: var(--accent); }
+  .media-tile img, .media-tile video {
+    width: 100%; height: 100%; object-fit: cover; pointer-events: none;
+  }
+  .media-tile-label {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 6px; font-size: 10px;
+    background: rgba(0, 0, 0, 0.65); color: var(--text); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; text-align: left;
+  }
+  .media-tile-delete {
+    position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; padding: 0;
+    border-radius: 50%; background: rgba(0, 0, 0, 0.65); color: white; border: none;
+    font-size: 12px; line-height: 1; display: none; cursor: pointer;
+  }
+  .media-tile:hover .media-tile-delete { display: block; }
 </style>
 </head>
 <body>
@@ -356,6 +393,16 @@
         </div>
         <div id="obsScenesList" class="obs-scenes-list"></div>
       </div>
+    </section>
+    <section>
+      <div class="panel-title">Media Library</div>
+      <div id="mediaTabs" class="media-tabs"></div>
+      <div class="media-toolbar">
+        <input type="text" id="mediaSearchInput" class="media-search" placeholder="Search…" />
+        <button class="btn-neutral media-upload-btn" id="mediaUploadBtn">Upload</button>
+        <input type="file" id="mediaFileInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" style="display:none" />
+      </div>
+      <div id="mediaGrid" class="media-grid"></div>
     </section>
   </main>
   <script src="operator.js"></script>

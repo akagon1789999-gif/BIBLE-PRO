@@ -6,6 +6,7 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const multer = require("multer");
+const db = require("./lib/db");
 const { createSession, parseTranscript } = require("./lib/referenceParser");
 const {
   fetchVerseText,
@@ -31,6 +32,7 @@ const {
   listMotionBackgrounds,
   normalizeBackground,
 } = require("./lib/backgrounds");
+const mediaLibrary = require("./lib/mediaLibrary");
 
 const PORT = process.env.PORT || 3000;
 const TRANSLATION = process.env.TRANSLATION || "KJV";
@@ -62,13 +64,56 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use(MOTION_URL_PREFIX, express.static(MOTION_DIR));
 
 app.get("/api/backgrounds", (req, res) => {
-  res.json({ presets: BACKGROUND_PRESETS, motion: listMotionBackgrounds() });
+  const dbMotion = mediaLibrary.listAssets("motion").map((a) => ({ id: a.id, label: a.label, type: "video", url: a.url }));
+  const uploads = mediaLibrary
+    .listAssets("background")
+    .map((a) => ({ id: a.id, label: a.label, type: a.kind, url: a.url }));
+  res.json({ presets: BACKGROUND_PRESETS, motion: [...listMotionBackgrounds(), ...dbMotion], uploads });
 });
 
 app.post("/api/backgrounds/upload", upload.single("file"), (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded." });
   const type = VIDEO_MIME_RE.test(req.file.mimetype) ? "video" : "image";
-  res.json({ url: `/uploads/${req.file.filename}`, type });
+  const asset = mediaLibrary.createAsset({
+    category: type === "video" ? "motion" : "background",
+    kind: type,
+    filename: req.file.filename,
+    originalName: req.file.originalname,
+    url: `/uploads/${req.file.filename}`,
+  });
+  res.json({ url: asset.url, type, id: asset.id });
+});
+
+app.get("/api/media/:category", (req, res) => {
+  const { category } = req.params;
+  if (!mediaLibrary.CATEGORIES.includes(category)) return res.status(400).json({ error: "Invalid category." });
+  const dbAssets = mediaLibrary.listAssets(category, req.query.search);
+  const folderAssets =
+    category === "motion"
+      ? listMotionBackgrounds().map((m) => ({ id: m.id, category, kind: "video", label: m.label, url: m.url, deletable: false }))
+      : [];
+  res.json({ assets: [...folderAssets, ...dbAssets] });
+});
+
+app.post("/api/media/:category/upload", upload.single("file"), (req, res) => {
+  const { category } = req.params;
+  if (!mediaLibrary.CATEGORIES.includes(category)) return res.status(400).json({ error: "Invalid category." });
+  if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+  const kind = VIDEO_MIME_RE.test(req.file.mimetype) ? "video" : "image";
+  const asset = mediaLibrary.createAsset({
+    category,
+    kind,
+    filename: req.file.filename,
+    originalName: req.file.originalname,
+    url: `/uploads/${req.file.filename}`,
+  });
+  res.json({ asset });
+});
+
+app.delete("/api/media/:id", (req, res) => {
+  const deleted = mediaLibrary.deleteAsset(req.params.id, uploadsDir);
+  if (!deleted) return res.status(404).json({ error: "Asset not found or not deletable." });
+  res.json({ ok: true });
 });
 
 app.get("/api/translations", async (req, res) => {
@@ -580,4 +625,5 @@ server.listen(PORT, () => {
   console.log(`Projector Bible server running at http://localhost:${PORT}`);
   console.log(`  Operator console: http://localhost:${PORT}/operator.html`);
   console.log(`  Display output:   http://localhost:${PORT}/display.html`);
+  console.log(`  Database:         ${db.name}`);
 });
