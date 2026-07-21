@@ -2,11 +2,15 @@
   "name": "sofer-2.0",
   "version": "0.1.0",
   "description": "Sofer 2.0 — AI-powered church presentation app: live sermon transcription with Scripture detection, a song and media library, and a service playlist, all projected from one operator console.",
-  "main": "server.js",
+  "main": "electron/main.js",
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "setup:offline-stt": "node scripts/setup-offline-stt.js"
+    "setup:offline-stt": "node scripts/setup-offline-stt.js",
+    "electron:dev": "electron .",
+    "postinstall": "electron-builder install-app-deps",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
   },
   "dependencies": {
     "@deepgram/sdk": "^5.6.0",
@@ -21,5 +25,38 @@
   },
   "optionalDependencies": {
     "nodejs-whisper": "^0.3.0"
+  },
+  "devDependencies": {
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.sofer2.desktop",
+    "productName": "Sofer 2.0",
+    "directories": { "output": "dist" },
+    "files": [
+      "server.js",
+      "package.json",
+      "electron/**/*",
+      "lib/**/*",
+      "public/**/*",
+      "node_modules/**/*",
+      "!node_modules/nodejs-whisper/**/*",
+      "!data/**/*"
+    ],
+    "asarUnpack": ["node_modules/better-sqlite3/**/*"],
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.icns",
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

@@ -312,6 +312,54 @@ Then open, on the same laptop:
 - **Display output**: http://localhost:3000/display.html — drag this window
   onto the projector/TV's screen and make it fullscreen (F11 in Chrome).
 
+## Desktop app (Electron)
+
+For a non-technical volunteer setting this up on a booth PC, there's a
+double-click installer ([`electron/`](electron/)) that bundles Node.js
+itself, opens as a normal desktop app, and replaces hand-editing `.env`
+with an actual **Settings** screen — no terminal, no Node.js install, no
+Chrome tab to remember to open.
+
+**Building it** (for maintainers — requires the regular [Setup](#setup)
+above plus `npm install` to have pulled in `electron`/`electron-builder`):
+
+```bash
+npm run dist:mac    # produces dist/Sofer 2.0-<version>.dmg
+npm run dist:win    # produces dist/Sofer 2.0 Setup <version>.exe
+```
+
+App icons are generated from `public/icons/icon-512.png` into
+`build/icon.icns` / `build/icon.ico` — regenerate those first if the logo
+changes. The installer intentionally does **not** include the offline
+speech-recognition fallback (whisper.cpp) — it's an optional dependency
+that needs a native build toolchain per platform; the packaged app still
+degrades to it gracefully being simply unavailable, same as on Railway
+today. Live (Deepgram) transcription is unaffected.
+
+**Installing it** — these builds are not code-signed (that costs
+money/year and isn't worth it for an internal tool yet), so the OS will
+warn on first launch:
+
+- **Windows**: run the `.exe`, click **More info** → **Run anyway** on the
+  "Windows protected your PC" SmartScreen prompt, then follow the install
+  wizard.
+- **Mac**: drag the app from the mounted `.dmg` into Applications, then
+  **right-click → Open** the first time (regular double-click gets
+  silently blocked by Gatekeeper for an unsigned app) and confirm **Open**
+  on the dialog.
+
+**First launch** opens a **Settings** screen instead of the main console —
+a Deepgram API key is required, OBS WebSocket URL/password and a Motion
+Backgrounds folder are optional (under "Advanced"). Saving restarts the
+app and applies them. Settings are stored in the OS's normal per-user app
+data location (not a `.env` file), and the SQLite database lives there
+too, not inside the installed app itself.
+
+The app's **Display** menu replaces the manual "drag the Display window to
+the second monitor and press F11" step: **Show on Projector** lists any
+secondary monitor and opens the projector output there, fullscreen, in one
+click.
+
 ## Running on a Sunday
 
 1. Open both pages in Chrome on the booth laptop.

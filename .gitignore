@@ -3,3 +3,5 @@ node_modules/
 public/uploads/
 data/
 .claude/
+dist/
+.DS_Store

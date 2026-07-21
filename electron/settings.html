@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Sofer 2.0 Settings</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1f2330;
+    --text: #e8eaed;
+    --muted: #8a8f9a;
+    --accent: #4f8cff;
+    --border: #2a2f3a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px 24px;
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  p.hint { color: var(--muted); font-size: 12px; margin: 0 0 18px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 14px 0 6px; }
+  input[type="text"], input[type="password"] {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 8px 10px; font: inherit; font-size: 13px;
+  }
+  .folder-row { display: flex; gap: 8px; }
+  .folder-row input { flex: 1; }
+  button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: white; width: 100%; margin-top: 20px; padding: 10px; }
+  details { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 10px; }
+  summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+  #status { font-size: 12px; margin-top: 10px; min-height: 16px; }
+  #status.ok { color: #6bdb9a; }
+  #status.err { color: #ff8a7a; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+  <h1>Sofer 2.0 Settings</h1>
+  <p class="hint">Saved here instead of a .env file — restart after saving to apply.</p>
+
+  <label for="deepgramApiKey">Deepgram API Key (required for live speech recognition)</label>
+  <input type="password" id="deepgramApiKey" placeholder="Get one at deepgram.com" />
+
+  <details>
+    <summary>Advanced (OBS remote control, motion backgrounds)</summary>
+
+    <label for="obsWebsocketUrl">OBS WebSocket URL</label>
+    <input type="text" id="obsWebsocketUrl" placeholder="ws://127.0.0.1:4455" />
+
+    <label for="obsWebsocketPassword">OBS WebSocket Password</label>
+    <input type="password" id="obsWebsocketPassword" placeholder="leave blank if OBS auth is disabled" />
+
+    <label for="motionBackgroundsDir">Motion Backgrounds Folder</label>
+    <div class="folder-row">
+      <input type="text" id="motionBackgroundsDir" placeholder="defaults to a folder inside app data" readonly />
+      <button type="button" id="browseBtn">Browse…</button>
+    </div>
+  </details>
+
+  <button type="button" class="btn-primary" id="saveBtn">Save &amp; Restart</button>
+  <div id="status"></div>
+
+  <script src="settings.js"></script>
+</body>
+</html>
