@@ -34,6 +34,7 @@ const {
 } = require("./lib/backgrounds");
 const mediaLibrary = require("./lib/mediaLibrary");
 const songLibrary = require("./lib/songLibrary");
+const playlist = require("./lib/playlist");
 
 const PORT = process.env.PORT || 3000;
 const TRANSLATION = process.env.TRANSLATION || "KJV";
@@ -172,6 +173,29 @@ app.delete("/api/songs/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/api/playlist", (req, res) => {
+  res.json({ items: playlist.listItems() });
+});
+
+app.post("/api/playlist", express.json(), (req, res) => {
+  try {
+    const item = playlist.addItem(req.body || {});
+    res.status(201).json({ item });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put("/api/playlist/reorder", express.json(), (req, res) => {
+  if (!Array.isArray(req.body?.orderedIds)) return res.status(400).json({ error: "orderedIds array is required." });
+  res.json({ items: playlist.reorder(req.body.orderedIds) });
+});
+
+app.delete("/api/playlist/:id", (req, res) => {
+  if (!playlist.deleteItem(req.params.id)) return res.status(404).json({ error: "Playlist item not found." });
+  res.json({ ok: true });
+});
+
 function exportFilename(ext) {
   const stamp = new Date().toISOString().slice(0, 10);
   return `sermon-${stamp}.${ext}`;
@@ -205,6 +229,7 @@ const displayClients = new Set();
 const operatorState = new Map(); // ws -> { session, pending: Map<id, suggestion>, recent: Map<key, ts> }
 let currentBackground = DEFAULT_BACKGROUND;
 let currentShow = null; // last {type:"show", ...} payload broadcast, or null if the display is cleared
+let currentPlaylistItemId = null; // id of the playlist item last played, if any — operator-only, not sent to displays
 
 function send(ws, msg) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
@@ -223,6 +248,15 @@ function broadcastState(msg) {
   }
 }
 
+// Operator-only state (e.g. playlist position) that the display doesn't
+// need and shouldn't receive.
+function broadcastToOperators(msg) {
+  const data = JSON.stringify(msg);
+  for (const ws of operatorState.keys()) {
+    if (ws.readyState === ws.OPEN) ws.send(data);
+  }
+}
+
 function dedupeKey(s) {
   return `${s.bookId}:${s.chapter}:${s.verse}`;
 }
@@ -230,6 +264,100 @@ function dedupeKey(s) {
 function formatVerseRef(s) {
   if (s.isChapterOnly) return `${s.bookName} ${s.chapter}`;
   return s.verseEnd ? `${s.bookName} ${s.chapter}:${s.verse}-${s.verseEnd}` : `${s.bookName} ${s.chapter}:${s.verse}`;
+}
+
+// The four ways content ever ends up on the projector — "manual" verse
+// entry, song sections, custom text, and background selection all funnel
+// through here, and so does playlist playback (see playPlaylistItem below).
+// Each returns true/false so a caller (like the playlist) can tell whether
+// playback actually succeeded, e.g. a book that no longer resolves or a
+// song that's since been deleted.
+async function projectScripture(ws, { bookId, bookName, chapter, verse, verseEnd }) {
+  const book = bookById(bookId) || findBookByAlias(bookName || "");
+  if (!book || !chapter || !verse) return false;
+  try {
+    const result = verseEnd
+      ? await fetchVerseRange(book.id, chapter, verse, verseEnd, TRANSLATION)
+      : await fetchVerseText(book.id, chapter, verse, TRANSLATION);
+    const suggestion = {
+      id: crypto.randomUUID(),
+      bookId: book.id,
+      bookName: book.name,
+      chapter,
+      verse,
+      verseEnd: verseEnd || undefined,
+      isChapterOnly: false,
+      source: "manual",
+      translation: TRANSLATION,
+      text: result ? result.text : null,
+      createdAt: Date.now(),
+    };
+    suggestion.raw = formatVerseRef(suggestion);
+    currentShow = { type: "show", ...suggestion };
+    broadcastState(currentShow);
+    sermonLog.recordVerse({ ref: suggestion.raw, translation: suggestion.translation, text: suggestion.text });
+    return true;
+  } catch (err) {
+    send(ws, { type: "error", message: `Lookup failed: ${err.message}` });
+    return false;
+  }
+}
+
+function projectSong(songId, sectionIndex) {
+  const song = songLibrary.getSong(songId);
+  const section = song && song.sections[sectionIndex];
+  if (!song || !section) return false;
+  currentShow = {
+    type: "show",
+    id: crypto.randomUUID(),
+    song: true,
+    songId: song.id,
+    songTitle: song.title,
+    sectionLabel: section.label,
+    sectionIndex,
+    sectionCount: song.sections.length,
+    text: section.content,
+    createdAt: Date.now(),
+  };
+  broadcastState(currentShow);
+  sermonLog.recordVerse({ ref: `${song.title} — ${section.label}`, translation: null, text: section.content });
+  return true;
+}
+
+function projectCustomText(html, fontSize) {
+  const clean = typeof html === "string" ? sanitizeCustomTextHtml(html).slice(0, 4000) : "";
+  if (!clean) return false;
+  currentShow = {
+    type: "show",
+    id: crypto.randomUUID(),
+    custom: true,
+    html: clean,
+    fontSize: normalizeFontSize(fontSize),
+    createdAt: Date.now(),
+  };
+  broadcastState(currentShow);
+  return true;
+}
+
+function projectBackground(background) {
+  currentBackground = normalizeBackground(background);
+  broadcastState({ type: "background", background: currentBackground });
+  return true;
+}
+
+async function playPlaylistItem(ws, item) {
+  switch (item.type) {
+    case "scripture":
+      return projectScripture(ws, item.payload);
+    case "song":
+      return projectSong(item.payload.songId, item.payload.sectionIndex);
+    case "custom_text":
+      return projectCustomText(item.payload.html, item.payload.fontSize);
+    case "background":
+      return projectBackground(item.payload);
+    default:
+      return false;
+  }
 }
 
 function pruneRecent(recent, now) {
@@ -461,6 +589,7 @@ wss.on("connection", (ws, req) => {
   operatorState.set(ws, state);
   send(ws, { type: "background", background: currentBackground });
   if (currentShow) send(ws, currentShow);
+  send(ws, { type: "playlist-position", currentId: currentPlaylistItemId });
 
   ws.on("message", async (raw, isBinary) => {
     if (isBinary) {
@@ -584,80 +713,42 @@ wss.on("connection", (ws, req) => {
     }
 
     if (msg.type === "set-background") {
-      currentBackground = normalizeBackground(msg.background);
-      broadcastState({ type: "background", background: currentBackground });
+      projectBackground(msg.background);
       return;
     }
 
     if (msg.type === "manual") {
-      const book = bookById(msg.bookId) || findBookByAlias(msg.bookName || "");
       const chapter = parseInt(msg.chapter, 10);
       const verse = parseInt(msg.verse, 10);
       const verseEndRaw = msg.verseEnd ? parseInt(msg.verseEnd, 10) : null;
       const verseEnd = verseEndRaw && verseEndRaw > verse ? verseEndRaw : null;
-      if (book && chapter && verse) {
-        try {
-          const result = verseEnd
-            ? await fetchVerseRange(book.id, chapter, verse, verseEnd, TRANSLATION)
-            : await fetchVerseText(book.id, chapter, verse, TRANSLATION);
-          const suggestion = {
-            id: crypto.randomUUID(),
-            bookId: book.id,
-            bookName: book.name,
-            chapter,
-            verse,
-            verseEnd: verseEnd || undefined,
-            isChapterOnly: false,
-            source: "manual",
-            translation: TRANSLATION,
-            text: result ? result.text : null,
-            createdAt: Date.now(),
-          };
-          suggestion.raw = formatVerseRef(suggestion);
-          currentShow = { type: "show", ...suggestion };
-          broadcastState(currentShow);
-          sermonLog.recordVerse({ ref: suggestion.raw, translation: suggestion.translation, text: suggestion.text });
-        } catch (err) {
-          send(ws, { type: "error", message: `Lookup failed: ${err.message}` });
-        }
-      }
+      await projectScripture(ws, { bookId: msg.bookId, bookName: msg.bookName, chapter, verse, verseEnd });
       return;
     }
 
     if (msg.type === "song-section" && msg.songId && Number.isInteger(msg.sectionIndex)) {
-      const song = songLibrary.getSong(msg.songId);
-      const section = song && song.sections[msg.sectionIndex];
-      if (song && section) {
-        currentShow = {
-          type: "show",
-          id: crypto.randomUUID(),
-          song: true,
-          songId: song.id,
-          songTitle: song.title,
-          sectionLabel: section.label,
-          sectionIndex: msg.sectionIndex,
-          sectionCount: song.sections.length,
-          text: section.content,
-          createdAt: Date.now(),
-        };
-        broadcastState(currentShow);
-        sermonLog.recordVerse({ ref: `${song.title} — ${section.label}`, translation: null, text: section.content });
-      }
+      projectSong(msg.songId, msg.sectionIndex);
       return;
     }
 
     if (msg.type === "custom-text" && typeof msg.html === "string") {
-      const html = sanitizeCustomTextHtml(msg.html).slice(0, 4000);
-      if (!html) return;
-      currentShow = {
-        type: "show",
-        id: crypto.randomUUID(),
-        custom: true,
-        html,
-        fontSize: normalizeFontSize(msg.fontSize),
-        createdAt: Date.now(),
-      };
-      broadcastState(currentShow);
+      projectCustomText(msg.html, msg.fontSize);
+      return;
+    }
+
+    if (msg.type === "playlist-play" && msg.id) {
+      const item = playlist.getItem(msg.id);
+      if (!item) {
+        send(ws, { type: "error", message: "Playlist item not found." });
+        return;
+      }
+      const ok = await playPlaylistItem(ws, item);
+      if (ok) {
+        currentPlaylistItemId = item.id;
+        broadcastToOperators({ type: "playlist-position", currentId: currentPlaylistItemId });
+      } else {
+        send(ws, { type: "error", message: `Could not play "${item.label}" — it may reference deleted content.` });
+      }
       return;
     }
   });

@@ -14,6 +14,7 @@
   const manualBtn = document.getElementById("manualBtn");
   const customTextInput = document.getElementById("customTextInput");
   const customTextBtn = document.getElementById("customTextBtn");
+  const customTextAddBtn = document.getElementById("customTextAddBtn");
   const fmtBold = document.getElementById("fmtBold");
   const fmtItalic = document.getElementById("fmtItalic");
   const fmtUnderline = document.getElementById("fmtUnderline");
@@ -41,6 +42,8 @@
   const songAddBtn = document.getElementById("songAddBtn");
   const songSearchInput = document.getElementById("songSearchInput");
   const songBody = document.getElementById("songBody");
+  const playlistStrip = document.getElementById("playlistStrip");
+  const playlistList = document.getElementById("playlistList");
 
   let ws = null;
   let mediaStream = null;
@@ -80,6 +83,7 @@
       if (msg.type === "show") showPreview(msg);
       if (msg.type === "clear") hidePreview();
       if (msg.type === "background") applyPreviewBackground(msg.background);
+      if (msg.type === "playlist-position") applyPlaylistPosition(msg.currentId);
       if (msg.type === "stt-mode") applySttMode(msg.mode);
       if (msg.type === "error") {
         console.error(msg.message);
@@ -518,6 +522,13 @@
     wsSend({ type: "custom-text", html, fontSize: fmtSize.value });
   }
 
+  customTextAddBtn.onclick = () => {
+    const text = customTextInput.textContent.trim();
+    if (!text) return;
+    const label = text.length > 50 ? `${text.slice(0, 50)}…` : text;
+    addToPlaylist("custom_text", label, { html: customTextInput.innerHTML, fontSize: fmtSize.value });
+  };
+
   speakBtn.onclick = () => {
     if (!window.speechSynthesis) {
       alert("This browser doesn't support text-to-speech.");
@@ -714,6 +725,16 @@
     }
     if (clickable) {
       tile.onclick = () => selectBackground({ type: asset.kind === "video" ? "video" : "image", url: asset.url });
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "media-tile-add";
+      add.title = "Add to Playlist";
+      add.textContent = "+";
+      add.onclick = (e) => {
+        e.stopPropagation();
+        addToPlaylist("background", asset.label, { type: asset.kind === "video" ? "video" : "image", url: asset.url });
+      };
+      tile.appendChild(add);
     }
     return tile;
   }
@@ -871,14 +892,20 @@
     songBody.appendChild(deleteBtn);
 
     selectedSong.sections.forEach((section, i) => {
-      const item = document.createElement("button");
-      item.type = "button";
+      const item = document.createElement("div");
       item.className = `song-section-item${songActiveSectionIndex === i ? " live" : ""}`;
       const snippet = (section.content.split("\n")[0] || "").slice(0, 60);
-      item.innerHTML =
-        `<div class="song-section-label">${escapeHtml(section.label)}</div>` +
-        `<div class="song-section-snippet">${escapeHtml(snippet)}</div>`;
-      item.onclick = () => projectSongSection(i);
+      item.innerHTML = `
+        <button type="button" class="song-section-project">
+          <div class="song-section-label">${escapeHtml(section.label)}</div>
+          <div class="song-section-snippet">${escapeHtml(snippet)}</div>
+        </button>
+        <button type="button" class="song-section-add" title="Add to Playlist">+</button>
+      `;
+      item.querySelector(".song-section-project").onclick = () => projectSongSection(i);
+      item.querySelector(".song-section-add").onclick = () => {
+        addToPlaylist("song", `${selectedSong.title} — ${section.label}`, { songId: selectedSong.id, sectionIndex: i });
+      };
       songBody.appendChild(item);
     });
 
@@ -973,6 +1000,139 @@
     clearTimeout(songSearchDebounce);
     songSearchDebounce = setTimeout(loadSongs, 250);
   });
+
+  // --- Service Playlist: an ordered list of items (scripture/song/custom
+  // text/background) built ahead of time via the "+" buttons scattered
+  // through the other panels. Playing an item sends only {type:
+  // "playlist-play", id} — the server resolves and re-dispatches through
+  // the exact same projection functions the direct WS messages already
+  // use (see playPlaylistItem in server.js), so a playlist item can never
+  // show anything those functions wouldn't otherwise allow.
+  const PLAYLIST_TYPE_LABELS = { scripture: "Scripture", song: "Song", custom_text: "Custom Text", background: "Background" };
+  let playlistItems = [];
+  let currentPlaylistId = null;
+
+  async function addToPlaylist(type, label, payload) {
+    try {
+      const res = await fetch("/api/playlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, label, payload }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add to playlist.");
+      await loadPlaylist();
+    } catch (err) {
+      alert("Could not add to playlist: " + err.message);
+    }
+  }
+
+  async function loadPlaylist() {
+    try {
+      const res = await fetch("/api/playlist");
+      const data = await res.json();
+      playlistItems = data.items || [];
+      renderPlaylistStrip();
+      renderPlaylistList();
+    } catch (err) {
+      playlistList.innerHTML = '<div class="empty">Could not load playlist.</div>';
+      console.error("Failed to load playlist:", err);
+    }
+  }
+
+  function applyPlaylistPosition(currentId) {
+    currentPlaylistId = currentId;
+    renderPlaylistStrip();
+    renderPlaylistList();
+  }
+
+  function playPlaylistItemById(id) {
+    wsSend({ type: "playlist-play", id });
+  }
+
+  function renderPlaylistStrip() {
+    const currentIdx = playlistItems.findIndex((i) => i.id === currentPlaylistId);
+    const rows = [
+      { tag: "Now", item: currentIdx >= 0 ? playlistItems[currentIdx] : null },
+      { tag: "Next", item: currentIdx >= 0 ? playlistItems[currentIdx + 1] : playlistItems[0] },
+      { tag: "After Next", item: currentIdx >= 0 ? playlistItems[currentIdx + 2] : playlistItems[1] },
+    ];
+    playlistStrip.innerHTML = "";
+    rows.forEach(({ tag, item }) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = `playlist-strip-row${item && item.id === currentPlaylistId ? " current" : ""}`;
+      row.disabled = !item;
+      row.innerHTML =
+        `<span class="playlist-strip-tag">${tag}</span>` +
+        `<span class="playlist-strip-label">${item ? escapeHtml(item.label) : "—"}</span>`;
+      if (item) row.onclick = () => playPlaylistItemById(item.id);
+      playlistStrip.appendChild(row);
+    });
+  }
+
+  function renderPlaylistList() {
+    if (!playlistItems.length) {
+      playlistList.innerHTML =
+        '<div class="empty">Playlist is empty — use the + buttons throughout the console to add items.</div>';
+      return;
+    }
+    playlistList.innerHTML = "";
+    playlistItems.forEach((item, i) => {
+      const row = document.createElement("div");
+      row.className = `playlist-item${item.id === currentPlaylistId ? " current" : ""}`;
+      row.innerHTML = `
+        <button type="button" class="playlist-item-main">
+          <div class="playlist-item-type">${PLAYLIST_TYPE_LABELS[item.type] || item.type}</div>
+          <div class="playlist-item-label">${escapeHtml(item.label)}</div>
+        </button>
+        <div class="playlist-item-controls">
+          <button type="button" class="playlist-item-btn" data-dir="up" title="Move up">▲</button>
+          <button type="button" class="playlist-item-btn" data-dir="down" title="Move down">▼</button>
+        </div>
+        <button type="button" class="playlist-item-delete" title="Remove">×</button>
+      `;
+      row.querySelector(".playlist-item-main").onclick = () => playPlaylistItemById(item.id);
+      const upBtn = row.querySelector('[data-dir="up"]');
+      const downBtn = row.querySelector('[data-dir="down"]');
+      upBtn.disabled = i === 0;
+      downBtn.disabled = i === playlistItems.length - 1;
+      upBtn.onclick = () => movePlaylistItem(i, i - 1);
+      downBtn.onclick = () => movePlaylistItem(i, i + 1);
+      row.querySelector(".playlist-item-delete").onclick = async () => {
+        if (!confirm(`Remove "${item.label}" from the playlist?`)) return;
+        try {
+          const res = await fetch(`/api/playlist/${item.id}`, { method: "DELETE" });
+          if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
+          loadPlaylist();
+        } catch (err) {
+          alert("Delete failed: " + err.message);
+        }
+      };
+      playlistList.appendChild(row);
+    });
+  }
+
+  async function movePlaylistItem(fromIndex, toIndex) {
+    if (toIndex < 0 || toIndex >= playlistItems.length) return;
+    const ids = playlistItems.map((i) => i.id);
+    const [moved] = ids.splice(fromIndex, 1);
+    ids.splice(toIndex, 0, moved);
+    try {
+      const res = await fetch("/api/playlist/reorder", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderedIds: ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Reorder failed");
+      playlistItems = data.items;
+      renderPlaylistStrip();
+      renderPlaylistList();
+    } catch (err) {
+      alert("Reorder failed: " + err.message);
+    }
+  }
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
@@ -1077,6 +1237,7 @@
         <div class="bible-verse-row">
           <span class="bible-verse-num">${v.verse}</span>
           <span class="bible-verse-text">${escapeHtml(v.text)}</span>
+          <button class="bible-verse-add" data-verse="${v.verse}" title="Add to Playlist">+</button>
           <button class="bible-verse-project" data-verse="${v.verse}">Project</button>
         </div>`
       )
@@ -1089,6 +1250,17 @@
           bookName: bibleSelectedBook.name,
           chapter: bibleSelectedChapter,
           verse: parseInt(el.dataset.verse, 10),
+        });
+      };
+    });
+    bibleBrowserBody.querySelectorAll(".bible-verse-add").forEach((el) => {
+      el.onclick = () => {
+        const verse = parseInt(el.dataset.verse, 10);
+        addToPlaylist("scripture", `${bibleSelectedBook.name} ${bibleSelectedChapter}:${verse}`, {
+          bookId: bibleSelectedBook.id,
+          bookName: bibleSelectedBook.name,
+          chapter: bibleSelectedChapter,
+          verse,
         });
       };
     });
@@ -1154,5 +1326,6 @@
   renderMediaTabs();
   loadMediaAssets();
   loadSongs();
+  loadPlaylist();
   connectWs();
 })();

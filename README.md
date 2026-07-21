@@ -223,6 +223,22 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   message — the server resolves the actual lyrics from the database, so
   there's no way for stale or tampered text to end up on screen. Deleting a
   song cascades to its sections.
+- **Service Playlist** ([`lib/playlist.js`](lib/playlist.js)): an ordered,
+  SQLite-backed list of service items — scripture, song sections, custom
+  text, and backgrounds — built ahead of time and stepped through live. Add
+  an item from wherever you'd already find it (a **+** button next to Bible
+  verses, song sections, the Custom Text box, and Media Library
+  background/motion tiles), reorder with the ▲/▼ buttons, and click any item
+  — in the list or in the **Now / Next / After Next** strip at the top of
+  the panel — to project it immediately. Playing an item sends only
+  `{type: "playlist-play", id}` over the WebSocket; the server resolves and
+  projects it through the *exact same* functions the direct verse/song/
+  custom-text/background messages already use (`projectScripture`,
+  `projectSong`, `projectCustomText`, `projectBackground` in
+  [`server.js`](server.js)) — the one bit of refactoring this phase did, so
+  a playlist item can never show anything those paths wouldn't otherwise
+  allow, and can't go stale (a song or verse plays with whatever's
+  currently in the database, not a frozen copy from when it was added).
 - **OBS overlay** (`public/obs.html`): a fully transparent page for
   streaming — add it as an OBS **Browser Source** (`http://localhost:3000/obs.html`
   if OBS runs on the same machine) and it composites verse/custom-text
