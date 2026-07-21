@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>OBS Overlay — Projector Bible</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  /* Deliberately no background color/image anywhere on this page — OBS's
+     Browser Source composites it with full transparency as long as nothing
+     here paints an opaque background. This page only ever shows text. */
+  html, body {
+    margin: 0; height: 100%; color: #fff;
+    font-family: Georgia, "Times New Roman", serif;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    background: transparent;
+  }
+  #stage {
+    width: 90vw;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  #stage.visible { opacity: 1; }
+  #panel {
+    display: inline-block;
+    max-width: 100%;
+    padding: 44px 64px;
+  }
+  #verseText {
+    font-size: clamp(28px, 5vw, 72px);
+    line-height: 1.35;
+    font-weight: 500;
+    white-space: pre-line;
+    /* Extra-strong outline vs. the projector display — this sits over live
+       camera footage, not a chosen background, so legibility matters more. */
+    text-shadow:
+      -2.5px -2.5px 0 #000, 2.5px -2.5px 0 #000, -2.5px 2.5px 0 #000, 2.5px 2.5px 0 #000,
+      -2.5px 0 0 #000, 2.5px 0 0 #000, 0 -2.5px 0 #000, 0 2.5px 0 #000,
+      0 0 16px rgba(0, 0, 0, 0.9), 0 0 32px rgba(0, 0, 0, 0.7);
+  }
+  #verseText.size-small { font-size: clamp(20px, 3.5vw, 48px); }
+  #verseText.size-normal { font-size: clamp(28px, 5vw, 72px); }
+  #verseText.size-large { font-size: clamp(36px, 6.5vw, 96px); }
+  #verseText.size-xlarge { font-size: clamp(44px, 8vw, 120px); }
+  #verseRef {
+    margin-top: 28px;
+    font-size: clamp(18px, 2.4vw, 34px);
+    color: #d8b25c;
+    letter-spacing: 0.03em;
+    text-shadow:
+      -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000,
+      0 0 8px rgba(0, 0, 0, 0.9);
+  }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="panel">
+      <div id="verseText"></div>
+      <div id="verseRef"></div>
+    </div>
+  </div>
+  <script src="obs.js"></script>
+</body>
+</html>

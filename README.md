@@ -76,13 +76,22 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
     so sentences can get cut awkwardly at boundaries), there are no interim
     results while offline, and there's a few-second gap during the online↔
     offline handover — not an instant, zero-gap hot-swap.
+  - **⚠️ This cannot ever work through the Railway URL — by fundamental
+    design, not as a bug to fix.** If you're accessing the operator
+    console from a Railway link, the page itself, the WebSocket, all of
+    it, live on a remote server — if *your* internet drops, your browser
+    can't reach that remote server at all anymore, so there's nothing
+    running "locally" for it to fall back to. Offline fallback only means
+    anything when `server.js` is running **on the same machine as the
+    browser** (`npm start`, opened at `localhost:3000`) — only then does
+    the browser↔server connection stay alive over the local loopback
+    interface while just the server's own outbound connection to Deepgram
+    fails. For an actual Sunday service where this matters, run locally
+    on the booth laptop, not the Railway URL.
   - **Deployment**: `nodejs-whisper` is an *optional* dependency
     specifically so a build environment without `cmake` (Railway's, for
     example) doesn't fail the whole `npm install` — it just runs without
-    offline fallback. This is fine: offline fallback only matters for a
-    laptop actually running the server locally. If Railway's internet goes
-    down, the whole hosted app is unreachable regardless of STT engine, so
-    there's nothing to fall back to there anyway.
+    offline fallback there, consistent with the point above.
 - **Manual / Auto mode**: a toggle in the header controls what happens when
   a verse is detected from speech. **Manual** (default) queues it as a card
   in Verse Suggestions for you to Approve or Reject. **Auto** skips the
@@ -189,6 +198,16 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   live-projection logic, it's just another way to trigger the existing one.
   Backed by two new REST routes, `GET /api/bible/books` and
   `GET /api/bible/chapter/:bookId/:chapter`, both read-only and stateless.
+- **OBS overlay** (`public/obs.html`): a fully transparent page for
+  streaming — add it as an OBS **Browser Source** (`http://localhost:3000/obs.html`
+  if OBS runs on the same machine) and it composites verse/custom-text
+  directly over your camera feed, no black box behind it. It's wired to
+  the exact same broadcasts the projector display uses — approve a verse
+  or project custom text as usual and both update together — but it
+  deliberately ignores background selection entirely (there's no
+  "background" here, your camera feed *is* the background) and uses a
+  stronger text outline than the projector display, since legibility over
+  live video needs more contrast than over a still image/color.
 
 ## Setup
 
