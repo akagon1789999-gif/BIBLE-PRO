@@ -78,6 +78,17 @@ function loadWithRetry(win, url, attempt = 0) {
   });
 }
 
+// The browser window's own console (mic/getUserMedia errors, WebSocket
+// failures, etc. from operator.js) is a separate process from the main-
+// process log above — mirror it into the same file, since that's exactly
+// where client-side audio-capture problems would actually show up.
+const CONSOLE_LEVELS = ["log", "warn", "error", "debug"];
+function mirrorRendererConsole(win, label) {
+  win.webContents.on("console-message", (event, level, message, line, sourceId) => {
+    console.log(`[renderer:${label}] ${CONSOLE_LEVELS[level] || level}: ${message} (${sourceId}:${line})`);
+  });
+}
+
 function createOperatorWindow() {
   if (operatorWindow) {
     operatorWindow.focus();
@@ -90,6 +101,7 @@ function createOperatorWindow() {
     icon: path.join(__dirname, "..", "public", "icons", "icon-512.png"),
     webPreferences: { contextIsolation: true },
   });
+  mirrorRendererConsole(operatorWindow, "operator");
   loadWithRetry(operatorWindow, `http://localhost:${PORT}/operator.html`);
   operatorWindow.on("closed", () => {
     operatorWindow = null;
@@ -113,6 +125,7 @@ function createSettingsWindow() {
     },
   });
   settingsWindow.setMenuBarVisibility(false);
+  mirrorRendererConsole(settingsWindow, "settings");
   settingsWindow.loadFile(path.join(__dirname, "settings.html"));
   settingsWindow.on("closed", () => {
     settingsWindow = null;
@@ -132,6 +145,7 @@ function createDisplayWindow(displayId) {
     fullscreen: true,
     webPreferences: { contextIsolation: true },
   });
+  mirrorRendererConsole(displayWindow, "display");
   loadWithRetry(displayWindow, `http://localhost:${PORT}/display.html`);
   displayWindow.on("closed", () => {
     displayWindow = null;
@@ -156,6 +170,10 @@ function buildMenu() {
     // standard Cmd/Ctrl+X/C/V key equivalents — paste stops working in
     // every text field in the app, not just Settings.
     { role: "editMenu" },
+    {
+      label: "View",
+      submenu: [{ role: "reload" }, { role: "toggleDevTools" }],
+    },
     {
       label: "Display",
       submenu: [
