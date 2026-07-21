@@ -38,6 +38,9 @@
   const mediaUploadBtn = document.getElementById("mediaUploadBtn");
   const mediaFileInput = document.getElementById("mediaFileInput");
   const mediaGrid = document.getElementById("mediaGrid");
+  const songAddBtn = document.getElementById("songAddBtn");
+  const songSearchInput = document.getElementById("songSearchInput");
+  const songBody = document.getElementById("songBody");
 
   let ws = null;
   let mediaStream = null;
@@ -403,6 +406,7 @@
   };
 
   function formatRef(msg) {
+    if (msg.song) return `${msg.songTitle} — ${msg.sectionLabel}`;
     if (msg.isChapterOnly) return `${msg.bookName} ${msg.chapter} (${msg.translation})`;
     const verses = msg.verseEnd ? `${msg.verse}-${msg.verseEnd}` : msg.verse;
     return `${msg.bookName} ${msg.chapter}:${verses} (${msg.translation})`;
@@ -421,8 +425,12 @@
       previewText.className = "size-normal";
       previewRef.textContent = formatRef(msg);
       previewRef.style.display = "";
-      liveTranslationSelect.style.display = "";
-      if (liveTranslationSelect.value !== msg.translation) liveTranslationSelect.value = msg.translation;
+      if (msg.song) {
+        liveTranslationSelect.style.display = "none";
+      } else {
+        liveTranslationSelect.style.display = "";
+        if (liveTranslationSelect.value !== msg.translation) liveTranslationSelect.value = msg.translation;
+      }
     }
     previewStage.classList.add("visible");
   }
@@ -764,6 +772,208 @@
     }
   };
 
+  // --- Song Library: search/browse songs, drill into a song's sections,
+  // and project one at a time. Prev/Next just re-sends "song-section" with
+  // the next index — the server resolves the actual lyrics from the DB
+  // (same "client sends a reference, server resolves content" pattern as
+  // Bible verses), so there's no risk of stale/tampered lyrics on screen.
+  let selectedSong = null;
+  let songActiveSectionIndex = null;
+
+  async function loadSongs() {
+    songBody.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      const q = songSearchInput.value.trim();
+      const res = await fetch(`/api/songs${q ? `?search=${encodeURIComponent(q)}` : ""}`);
+      const data = await res.json();
+      renderSongList(data.songs || []);
+    } catch (err) {
+      songBody.innerHTML = '<div class="empty">Could not load songs.</div>';
+      console.error("Failed to load songs:", err);
+    }
+  }
+
+  function renderSongList(songs) {
+    selectedSong = null;
+    songActiveSectionIndex = null;
+    if (!songs.length) {
+      songBody.innerHTML = '<div class="empty">No songs yet — add one to get started.</div>';
+      return;
+    }
+    songBody.innerHTML = "";
+    songs.forEach((song) => {
+      const item = document.createElement("div");
+      item.className = "song-list-item";
+      const meta = `${song.artist ? escapeHtml(song.artist) + " · " : ""}${song.sectionCount} section${song.sectionCount === 1 ? "" : "s"}`;
+      item.innerHTML = `<span class="song-title">${escapeHtml(song.title)}</span><span class="song-meta">${meta}</span>`;
+      item.onclick = () => openSongDetail(song.id);
+      songBody.appendChild(item);
+    });
+  }
+
+  async function openSongDetail(id) {
+    songBody.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      const res = await fetch(`/api/songs/${id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Song not found.");
+      selectedSong = data.song;
+      songActiveSectionIndex = null;
+      renderSongDetail();
+    } catch (err) {
+      songBody.innerHTML = '<div class="empty">Could not load song.</div>';
+      console.error("Failed to load song:", err);
+    }
+  }
+
+  function songBackButton(label, onClick) {
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "btn-neutral bible-back";
+    back.style.marginBottom = "10px";
+    back.textContent = label;
+    back.onclick = onClick;
+    return back;
+  }
+
+  function projectSongSection(index) {
+    if (!selectedSong || index < 0 || index >= selectedSong.sections.length) return;
+    songActiveSectionIndex = index;
+    wsSend({ type: "song-section", songId: selectedSong.id, sectionIndex: index });
+    renderSongDetail();
+  }
+
+  function renderSongDetail() {
+    songBody.innerHTML = "";
+    songBody.appendChild(songBackButton("‹ Back to Songs", () => loadSongs()));
+
+    const header = document.createElement("div");
+    header.innerHTML =
+      `<div class="song-detail-title">${escapeHtml(selectedSong.title)}</div>` +
+      (selectedSong.artist ? `<div class="song-detail-artist">${escapeHtml(selectedSong.artist)}</div>` : "");
+    songBody.appendChild(header);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn-danger";
+    deleteBtn.style.cssText = "font-size:12px;padding:5px 10px;margin-bottom:10px;";
+    deleteBtn.textContent = "Delete Song";
+    deleteBtn.onclick = async () => {
+      if (!confirm(`Delete "${selectedSong.title}"?`)) return;
+      try {
+        const res = await fetch(`/api/songs/${selectedSong.id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
+        loadSongs();
+      } catch (err) {
+        alert("Delete failed: " + err.message);
+      }
+    };
+    songBody.appendChild(deleteBtn);
+
+    selectedSong.sections.forEach((section, i) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = `song-section-item${songActiveSectionIndex === i ? " live" : ""}`;
+      const snippet = (section.content.split("\n")[0] || "").slice(0, 60);
+      item.innerHTML =
+        `<div class="song-section-label">${escapeHtml(section.label)}</div>` +
+        `<div class="song-section-snippet">${escapeHtml(snippet)}</div>`;
+      item.onclick = () => projectSongSection(i);
+      songBody.appendChild(item);
+    });
+
+    const nav = document.createElement("div");
+    nav.className = "song-nav";
+    const prevBtn = document.createElement("button");
+    prevBtn.type = "button";
+    prevBtn.className = "btn-neutral";
+    prevBtn.textContent = "‹ Prev";
+    prevBtn.disabled = songActiveSectionIndex === null || songActiveSectionIndex <= 0;
+    prevBtn.onclick = () => projectSongSection(songActiveSectionIndex - 1);
+    const pos = document.createElement("span");
+    pos.className = "song-nav-pos";
+    pos.textContent =
+      songActiveSectionIndex === null
+        ? `${selectedSong.sections.length} section${selectedSong.sections.length === 1 ? "" : "s"}`
+        : `${songActiveSectionIndex + 1} / ${selectedSong.sections.length}`;
+    const nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.className = "btn-neutral";
+    nextBtn.textContent = "Next ›";
+    nextBtn.disabled = songActiveSectionIndex !== null && songActiveSectionIndex >= selectedSong.sections.length - 1;
+    nextBtn.onclick = () => projectSongSection(songActiveSectionIndex === null ? 0 : songActiveSectionIndex + 1);
+    nav.appendChild(prevBtn);
+    nav.appendChild(pos);
+    nav.appendChild(nextBtn);
+    songBody.appendChild(nav);
+  }
+
+  function renderSongAddForm() {
+    songBody.innerHTML = "";
+    songBody.appendChild(songBackButton("‹ Cancel", () => loadSongs()));
+
+    const form = document.createElement("div");
+    form.className = "song-form";
+    form.innerHTML = `
+      <input type="text" id="songFormTitle" placeholder="Song title" />
+      <input type="text" id="songFormArtist" placeholder="Artist (optional)" />
+      <div id="songFormSections"></div>
+      <div class="song-form-actions">
+        <button type="button" class="btn-neutral" id="songFormAddSection">+ Add Section</button>
+        <button type="button" class="btn-primary" id="songFormSave">Save Song</button>
+      </div>
+    `;
+    songBody.appendChild(form);
+
+    const sectionsEl = form.querySelector("#songFormSections");
+    function addSectionRow(label) {
+      const row = document.createElement("div");
+      row.className = "song-section-row";
+      row.innerHTML = `
+        <button type="button" class="song-section-row-remove" title="Remove section">×</button>
+        <input type="text" class="song-form-label" placeholder="Label (e.g. Verse 1, Chorus)" value="${escapeHtml(label || "")}" />
+        <textarea class="song-form-content" placeholder="Lyrics…"></textarea>
+      `;
+      row.querySelector(".song-section-row-remove").onclick = () => row.remove();
+      sectionsEl.appendChild(row);
+    }
+    addSectionRow("Verse 1");
+    form.querySelector("#songFormAddSection").onclick = () => addSectionRow("");
+
+    form.querySelector("#songFormSave").onclick = async () => {
+      const title = form.querySelector("#songFormTitle").value.trim();
+      const artist = form.querySelector("#songFormArtist").value.trim();
+      const sections = [...sectionsEl.querySelectorAll(".song-section-row")].map((row) => ({
+        label: row.querySelector(".song-form-label").value.trim(),
+        content: row.querySelector(".song-form-content").value.trim(),
+      }));
+      if (!title) return alert("Song title is required.");
+      if (!sections.some((s) => s.label && s.content)) return alert("At least one section needs both a label and lyrics.");
+      try {
+        const res = await fetch("/api/songs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, artist, sections }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to save song.");
+        loadSongs();
+      } catch (err) {
+        alert("Save failed: " + err.message);
+      }
+    };
+  }
+
+  songAddBtn.onclick = () => {
+    renderSongAddForm();
+  };
+
+  let songSearchDebounce;
+  songSearchInput.addEventListener("input", () => {
+    clearTimeout(songSearchDebounce);
+    songSearchDebounce = setTimeout(loadSongs, 250);
+  });
+
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("/sw.js").catch((err) => console.error("SW registration failed:", err));
@@ -943,5 +1153,6 @@
   loadObsStatus();
   renderMediaTabs();
   loadMediaAssets();
+  loadSongs();
   connectWs();
 })();

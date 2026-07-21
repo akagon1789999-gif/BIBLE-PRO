@@ -33,6 +33,7 @@ const {
   normalizeBackground,
 } = require("./lib/backgrounds");
 const mediaLibrary = require("./lib/mediaLibrary");
+const songLibrary = require("./lib/songLibrary");
 
 const PORT = process.env.PORT || 3000;
 const TRANSLATION = process.env.TRANSLATION || "KJV";
@@ -145,6 +146,30 @@ app.get("/api/bible/chapter/:bookId/:chapter", async (req, res) => {
 
 app.get("/api/obs/status", async (req, res) => {
   res.json(await obsClient.getStatus());
+});
+
+app.get("/api/songs", (req, res) => {
+  res.json({ songs: songLibrary.listSongs(req.query.search) });
+});
+
+app.get("/api/songs/:id", (req, res) => {
+  const song = songLibrary.getSong(req.params.id);
+  if (!song) return res.status(404).json({ error: "Song not found." });
+  res.json({ song });
+});
+
+app.post("/api/songs", express.json(), (req, res) => {
+  try {
+    const song = songLibrary.createSong(req.body || {});
+    res.status(201).json({ song });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete("/api/songs/:id", (req, res) => {
+  if (!songLibrary.deleteSong(req.params.id)) return res.status(404).json({ error: "Song not found." });
+  res.json({ ok: true });
 });
 
 function exportFilename(ext) {
@@ -595,6 +620,28 @@ wss.on("connection", (ws, req) => {
         } catch (err) {
           send(ws, { type: "error", message: `Lookup failed: ${err.message}` });
         }
+      }
+      return;
+    }
+
+    if (msg.type === "song-section" && msg.songId && Number.isInteger(msg.sectionIndex)) {
+      const song = songLibrary.getSong(msg.songId);
+      const section = song && song.sections[msg.sectionIndex];
+      if (song && section) {
+        currentShow = {
+          type: "show",
+          id: crypto.randomUUID(),
+          song: true,
+          songId: song.id,
+          songTitle: song.title,
+          sectionLabel: section.label,
+          sectionIndex: msg.sectionIndex,
+          sectionCount: song.sections.length,
+          text: section.content,
+          createdAt: Date.now(),
+        };
+        broadcastState(currentShow);
+        sermonLog.recordVerse({ ref: `${song.title} — ${section.label}`, translation: null, text: section.content });
       }
       return;
     }

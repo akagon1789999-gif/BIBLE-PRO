@@ -18,6 +18,7 @@
   }
 
   function formatRef(msg) {
+    if (msg.song) return `${msg.songTitle} — ${msg.sectionLabel}`;
     if (msg.isChapterOnly) return `${msg.bookName} ${msg.chapter} (${msg.translation})`;
     const verses = msg.verseEnd ? `${msg.verse}-${msg.verseEnd}` : msg.verse;
     return `${msg.bookName} ${msg.chapter}:${verses} (${msg.translation})`;

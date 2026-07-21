@@ -211,6 +211,18 @@ Operator's browser (mic) --MediaRecorder--> audio chunks (WebSocket, binary)
   live-projection logic, it's just another way to trigger the existing one.
   Backed by two new REST routes, `GET /api/bible/books` and
   `GET /api/bible/chapter/:bookId/:chapter`, both read-only and stateless.
+- **Song Library** ([`lib/songLibrary.js`](lib/songLibrary.js)): a SQLite-backed
+  catalog of songs (`songs` + `song_sections` tables), each broken into
+  labeled sections (Verse 1, Chorus, Bridge, ...). The **Song Library** panel
+  lets you search songs, add one (title/artist plus any number of
+  label+lyrics sections), and drill into a song to project a section —
+  **Prev**/**Next** step through sections in order while the same section
+  stays projected, so you don't have to click back into the list between
+  verses. Like Bible verses, the operator only ever sends a
+  `{songId, sectionIndex}` reference over the `song-section` WebSocket
+  message — the server resolves the actual lyrics from the database, so
+  there's no way for stale or tampered text to end up on screen. Deleting a
+  song cascades to its sections.
 - **OBS overlay** (`public/obs.html`): a fully transparent page for
   streaming — add it as an OBS **Browser Source** (`http://localhost:3000/obs.html`
   if OBS runs on the same machine) and it composites verse/custom-text

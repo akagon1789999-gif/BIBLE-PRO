@@ -68,7 +68,7 @@
   main {
     flex: 1;
     display: grid;
-    grid-template-columns: 1fr 380px 320px 320px;
+    grid-template-columns: 1fr 380px 320px 320px 320px;
     gap: 1px;
     background: var(--border);
     overflow: hidden;
@@ -297,6 +297,43 @@
     font-size: 12px; line-height: 1; display: none; cursor: pointer;
   }
   .media-tile:hover .media-tile-delete { display: block; }
+  .song-search-bar { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .song-body { flex: 1; overflow-y: auto; padding: 10px; }
+  .song-list-item {
+    padding: 10px 12px; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column;
+    gap: 2px; margin-bottom: 4px;
+  }
+  .song-list-item:hover { background: var(--panel-2); }
+  .song-title { font-size: 14px; color: var(--text); }
+  .song-meta { font-size: 11px; color: var(--muted); }
+  .song-detail-title { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+  .song-detail-artist { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .song-section-item {
+    display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px;
+    cursor: pointer; margin-bottom: 6px; border: 1px solid var(--border); background: var(--panel-2);
+  }
+  .song-section-item:hover { border-color: var(--accent); }
+  .song-section-item.live { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.25); }
+  .song-section-label { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; }
+  .song-section-snippet {
+    font-size: 12px; color: var(--text); opacity: 0.8; margin-top: 2px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .song-nav { display: flex; align-items: center; gap: 8px; padding: 10px 0 4px; border-top: 1px solid var(--border); margin-top: 8px; }
+  .song-nav button { flex: 1; padding: 6px; font-size: 12px; }
+  .song-nav-pos { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .song-form input, .song-form textarea {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 12px; margin-bottom: 8px;
+  }
+  .song-form textarea { min-height: 60px; resize: vertical; }
+  .song-section-row { border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 8px; position: relative; }
+  .song-section-row-remove {
+    position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; padding: 0; border-radius: 50%;
+    background: var(--panel); border: 1px solid var(--border); color: var(--text); font-size: 12px; cursor: pointer;
+  }
+  .song-form-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .song-form-actions button { flex: 1; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -403,6 +440,16 @@
         <input type="file" id="mediaFileInput" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime" style="display:none" />
       </div>
       <div id="mediaGrid" class="media-grid"></div>
+    </section>
+    <section>
+      <div class="panel-title panel-title-row">
+        <span>Song Library</span>
+        <button class="btn-neutral" id="songAddBtn" style="padding:4px 10px;font-size:12px;">+ Add Song</button>
+      </div>
+      <div class="song-search-bar">
+        <input type="text" id="songSearchInput" class="media-search" placeholder="Search songs…" />
+      </div>
+      <div id="songBody" class="song-body"></div>
     </section>
   </main>
   <script src="operator.js"></script>
