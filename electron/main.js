@@ -161,6 +161,17 @@ function buildMenu() {
       label: "Sofer 2.0",
       submenu: [
         { label: "Settings…", click: createSettingsWindow },
+        {
+          label: "Show Walkthrough",
+          click: () => {
+            if (!operatorWindow) return;
+            // Reuses operator.js's own first-run auto-trigger rather than
+            // needing separate IPC plumbing just to start the tour.
+            operatorWindow.webContents.executeJavaScript(
+              'localStorage.removeItem("sofer-tour-seen"); location.reload();'
+            );
+          },
+        },
         { label: "Show Log File", click: () => shell.showItemInFolder(LOG_PATH) },
         { type: "separator" },
         { role: "quit" },

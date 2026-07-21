@@ -430,6 +430,29 @@
     color: var(--text); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px;
   }
   .playlist-load-row .playlist-item-delete:disabled { opacity: 0.3; cursor: default; }
+
+  .tour-help-btn { width: 30px; padding: 0; font-weight: 700; border-radius: 50%; }
+
+  /* Spotlight: a box positioned exactly over the current step's target,
+     whose box-shadow extends 9999px outward — dims everything else on
+     the page without needing clip-path/mask trickery. */
+  .tour-overlay { position: fixed; inset: 0; z-index: 2000; }
+  .tour-highlight {
+    position: fixed; border-radius: 8px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65);
+    border: 2px solid var(--accent); pointer-events: none;
+    transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+  }
+  .tour-callout {
+    position: fixed; width: 300px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    transition: top 0.25s ease, left 0.25s ease;
+  }
+  .tour-callout-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+  .tour-callout-body { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 14px; }
+  .tour-callout-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .tour-progress { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+  .tour-callout-actions { display: flex; gap: 6px; }
+  .tour-callout-actions button { padding: 6px 12px; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -447,6 +470,7 @@
     <button class="btn-primary" id="listenBtn">Start Listening</button>
     <button class="btn-danger" id="clearBtn">Clear Display</button>
     <button class="btn-neutral" id="installBtn" style="display:none">📲 Install App</button>
+    <button class="btn-neutral tour-help-btn" id="tourHelpBtn" title="Replay the walkthrough">?</button>
   </header>
   <div id="background-bar">
     <span class="bg-label">Background</span>
@@ -574,6 +598,21 @@
       <div id="playlistList" class="playlist-list"></div>
     </section>
   </main>
+  <div id="tourOverlay" class="tour-overlay" style="display:none">
+    <div id="tourHighlight" class="tour-highlight"></div>
+    <div id="tourCallout" class="tour-callout">
+      <div class="tour-callout-title" id="tourTitle"></div>
+      <div class="tour-callout-body" id="tourBody"></div>
+      <div class="tour-callout-footer">
+        <span class="tour-progress" id="tourProgress"></span>
+        <div class="tour-callout-actions">
+          <button class="btn-neutral" id="tourSkipBtn">Skip</button>
+          <button class="btn-neutral" id="tourBackBtn">Back</button>
+          <button class="btn-primary" id="tourNextBtn">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <script src="operator.js"></script>
 </body>
 </html>

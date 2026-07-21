@@ -1451,6 +1451,189 @@
     };
   });
 
+  // --- First-run guided walkthrough: a skippable spotlight tour over the
+  // major panels, since the desktop installer now puts this console in
+  // front of non-technical users with no one there to walk them through
+  // it live. Runs once (localStorage flag), replayable via the header "?"
+  // button or the desktop app's "Show Walkthrough" menu item.
+  const TOUR_SEEN_KEY = "sofer-tour-seen";
+  const TOUR_STEPS = [
+    {
+      selectors: ["#listenBtn", ".mode-toggle"],
+      title: "Start Listening",
+      body: "Begins live transcription and detects Bible references as they're spoken. Manual mode holds detected verses for your approval; Auto sends them straight to the display.",
+    },
+    {
+      selectors: ["#suggestions"],
+      title: "Verse Suggestions",
+      body: "In Manual mode, detected references appear here as cards — click Approve to send one to the display, or Reject to dismiss it.",
+    },
+    {
+      selectors: ["#preview-section"],
+      title: "Projector Preview",
+      body: "Shows exactly what's currently live on the projector display, so you always know what the congregation is seeing.",
+    },
+    {
+      selectors: ["#manualInput"],
+      title: "Manual Entry",
+      body: 'If a reference is missed or misheard, type it here (e.g. "John 3:16") and click Show to send it straight to the display.',
+    },
+    {
+      selectors: ["#customTextInput"],
+      title: "Custom Text",
+      body: "For announcements, welcome messages, or anything that isn't a Bible verse — type it here and click Project.",
+    },
+    {
+      selectors: ["#background-bar"],
+      title: "Backgrounds",
+      body: "Pick a solid, gradient, or motion background for the projector — or upload your own image or video.",
+    },
+    {
+      selectors: ['section[data-panel="bible"]'],
+      title: "Bible Browser",
+      body: "Browse any book, chapter, and verse and click to project it directly. Use the ‹ button in the corner to collapse this panel and free up room for others.",
+    },
+    {
+      selectors: ['section[data-panel="media"]'],
+      title: "Media Library",
+      body: "Your catalog of backgrounds, motion graphics, logos, and lower thirds — searchable, with your own uploads mixed in.",
+    },
+    {
+      selectors: ['section[data-panel="song"]'],
+      title: "Song Library",
+      body: "Songs broken into labeled sections (Verse 1, Chorus, etc.) — project a section and step through the rest with Prev/Next.",
+    },
+    {
+      selectors: ['section[data-panel="playlist"]'],
+      title: "Service Playlist",
+      body: "Build an ordered list of verses, songs, custom text, and backgrounds ahead of time, then click through them live. Save it under a name to reuse next week.",
+    },
+  ];
+
+  const tourOverlay = document.getElementById("tourOverlay");
+  const tourHighlight = document.getElementById("tourHighlight");
+  const tourCallout = document.getElementById("tourCallout");
+  const tourTitle = document.getElementById("tourTitle");
+  const tourBody = document.getElementById("tourBody");
+  const tourProgress = document.getElementById("tourProgress");
+  const tourSkipBtn = document.getElementById("tourSkipBtn");
+  const tourBackBtn = document.getElementById("tourBackBtn");
+  const tourNextBtn = document.getElementById("tourNextBtn");
+  const tourHelpBtn = document.getElementById("tourHelpBtn");
+  let tourStepIndex = 0;
+
+  // Expands the step's target panel first if it's currently collapsed
+  // (reusing the exact same functions the collapse buttons themselves
+  // use), so replaying the tour after collapsing panels doesn't try to
+  // spotlight a 44px-wide sliver.
+  function ensureTourTargetsVisible(step) {
+    step.selectors.forEach((sel) => {
+      const el = document.querySelector(sel);
+      const panelSection = el && el.closest("section[data-panel]");
+      if (panelSection && panelSection.classList.contains("collapsed")) {
+        const panel = panelSection.dataset.panel;
+        setPanelCollapsed(panel, false, collapsedPanels);
+        applyGridColumns(collapsedPanels);
+        localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify([...collapsedPanels]));
+      }
+    });
+  }
+
+  function tourTargetRect(step) {
+    const rects = step.selectors
+      .map((sel) => document.querySelector(sel))
+      .filter(Boolean)
+      .map((el) => el.getBoundingClientRect());
+    if (!rects.length) return null;
+    const top = Math.min(...rects.map((r) => r.top));
+    const left = Math.min(...rects.map((r) => r.left));
+    const bottom = Math.max(...rects.map((r) => r.bottom));
+    const right = Math.max(...rects.map((r) => r.right));
+    return { top, left, bottom, right, width: right - left, height: bottom - top };
+  }
+
+  function renderTourStep(retriesLeft) {
+    if (retriesLeft === undefined) retriesLeft = 1;
+    const step = TOUR_STEPS[tourStepIndex];
+    ensureTourTargetsVisible(step);
+    const firstEl = document.querySelector(step.selectors[0]);
+    if (firstEl) firstEl.scrollIntoView({ block: "center", behavior: "smooth" });
+
+    // Give the collapse-expand/scroll CSS transitions a moment to settle
+    // before measuring final positions.
+    setTimeout(() => {
+      const rect = tourTargetRect(step);
+      if (!rect) {
+        // Measuring can occasionally race the very first layout/scroll —
+        // give it one retry before concluding the target really is missing
+        // and skipping past this step.
+        if (retriesLeft > 0) {
+          renderTourStep(retriesLeft - 1);
+        } else if (tourStepIndex < TOUR_STEPS.length - 1) {
+          tourStepIndex++;
+          renderTourStep();
+        } else {
+          endTour();
+        }
+        return;
+      }
+
+      tourHighlight.style.top = `${rect.top - 6}px`;
+      tourHighlight.style.left = `${rect.left - 6}px`;
+      tourHighlight.style.width = `${rect.width + 12}px`;
+      tourHighlight.style.height = `${rect.height + 12}px`;
+
+      tourTitle.textContent = step.title;
+      tourBody.textContent = step.body;
+      tourProgress.textContent = `${tourStepIndex + 1} / ${TOUR_STEPS.length}`;
+      tourBackBtn.style.display = tourStepIndex === 0 ? "none" : "inline-block";
+      tourNextBtn.textContent = tourStepIndex === TOUR_STEPS.length - 1 ? "Done" : "Next";
+
+      const calloutWidth = 300;
+      const margin = 12;
+      let left = rect.left;
+      if (left + calloutWidth + margin > window.innerWidth) left = window.innerWidth - calloutWidth - margin;
+      if (left < margin) left = margin;
+      const calloutHeightEstimate = 170;
+      let top = rect.bottom + margin;
+      if (top + calloutHeightEstimate > window.innerHeight) top = Math.max(margin, rect.top - calloutHeightEstimate - margin);
+      tourCallout.style.left = `${left}px`;
+      tourCallout.style.top = `${top}px`;
+    }, 260);
+  }
+
+  function startTour() {
+    tourStepIndex = 0;
+    tourOverlay.style.display = "block";
+    renderTourStep();
+  }
+
+  function endTour() {
+    tourOverlay.style.display = "none";
+    localStorage.setItem(TOUR_SEEN_KEY, "1");
+  }
+
+  tourSkipBtn.onclick = endTour;
+  tourBackBtn.onclick = () => {
+    if (tourStepIndex > 0) {
+      tourStepIndex--;
+      renderTourStep();
+    }
+  };
+  tourNextBtn.onclick = () => {
+    if (tourStepIndex < TOUR_STEPS.length - 1) {
+      tourStepIndex++;
+      renderTourStep();
+    } else {
+      endTour();
+    }
+  };
+  tourHelpBtn.onclick = startTour;
+
+  if (!localStorage.getItem(TOUR_SEEN_KEY)) {
+    setTimeout(startTour, 800);
+  }
+
   loadTranslations();
   loadBackgroundPresets();
   loadBibleBooks();
