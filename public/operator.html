@@ -58,15 +58,10 @@
   header > * { position: relative; z-index: 1; }
   header h1 {
     font-size: 16px; margin: 0; font-weight: 600; flex: 1;
-    display: flex; align-items: baseline; gap: 8px;
+    display: flex; align-items: center; gap: 10px;
   }
-  .brand {
-    font-size: 18px; font-weight: 800; letter-spacing: 0.01em;
-    background: linear-gradient(90deg, #7fd6ff, #4f8cff);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
+  .brand-logo { height: 30px; width: auto; display: block; }
   .brand-sub { font-size: 12px; font-weight: 500; color: var(--muted); }
-  .app-logo { height: 28px; width: 28px; border-radius: 7px; background: white; padding: 2px; flex-shrink: 0; }
   .status-dot {
     width: 10px; height: 10px; border-radius: 50%;
     background: var(--bad); display: inline-block; margin-right: 6px;
@@ -417,8 +412,10 @@
 <body>
   <header>
     <span class="status-dot" id="statusDot"></span>
-    <img class="app-logo" src="/icons/icon-192.png" alt="Sofer 2.0" />
-    <h1><span class="brand">Sofer 2.0</span><span class="brand-sub">— Operator Console</span></h1>
+    <h1>
+      <img class="brand-logo" src="/icons/logo-wordmark.png" alt="Sofer 2.0" />
+      <span class="brand-sub">— Operator Console</span>
+    </h1>
     <span class="stt-mode-label" id="sttModeLabel" style="display:none"></span>
     <div class="mode-toggle" role="group" aria-label="Approval mode">
       <button type="button" class="mode-btn active" id="modeManualBtn" title="Suggestions wait for your Approve click">Manual</button>
