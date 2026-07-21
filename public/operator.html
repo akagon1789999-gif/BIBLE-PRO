@@ -100,7 +100,7 @@
     letter-spacing: 0.06em; color: var(--muted); border-bottom: 1px solid var(--border);
   }
   .panel-title-row { display: flex; align-items: center; justify-content: space-between; }
-  .export-links { display: flex; gap: 12px; text-transform: none; letter-spacing: normal; }
+  .export-links { display: flex; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); }
   .export-links a { color: var(--accent); text-decoration: none; font-size: 12px; }
   .export-links a:hover { text-decoration: underline; }
   #transcript {
@@ -446,15 +446,13 @@
   </div>
   <main>
     <section>
-      <div class="panel-title panel-title-row">
-        <span>Live Transcript</span>
-        <span class="export-links">
-          <a href="/api/export/transcript.txt" download>Export TXT</a>
-          <a href="/api/export/transcript.pdf" download>Export PDF</a>
-          <a href="#" id="downloadRecordingLink">Download Audio</a>
-        </span>
-      </div>
+      <div class="panel-title">Live Transcript</div>
       <div id="transcript"><span class="interim">Waiting for speech…</span></div>
+      <div class="export-links">
+        <a href="/api/export/transcript.txt" download>Export TXT</a>
+        <a href="/api/export/transcript.pdf" download>Export PDF</a>
+        <a href="#" id="downloadRecordingLink">Download Audio</a>
+      </div>
     </section>
     <section>
       <div class="panel-title">Verse Suggestions</div>
