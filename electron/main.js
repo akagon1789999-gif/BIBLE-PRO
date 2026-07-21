@@ -1,6 +1,21 @@
-const { app, BrowserWindow, Menu, screen, ipcMain, dialog, session } = require("electron");
+const { app, BrowserWindow, Menu, screen, ipcMain, dialog, session, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
+
+// A double-clicked app has no visible terminal, so console.log/error from
+// the embedded server (Deepgram/OBS connection failures, etc.) would
+// otherwise vanish. Mirror them into a log file so problems are actually
+// diagnosable without launching from a terminal.
+const LOG_PATH = path.join(app.getPath("userData"), "sofer.log");
+fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
+const logStream = fs.createWriteStream(LOG_PATH, { flags: "a" });
+for (const method of ["log", "error", "warn"]) {
+  const original = console[method].bind(console);
+  console[method] = (...args) => {
+    original(...args);
+    logStream.write(`[${new Date().toISOString()}] ${args.map(String).join(" ")}\n`);
+  };
+}
 
 // Settings live here instead of a hand-edited .env — this is the whole
 // point of packaging as a desktop app for non-technical users.
@@ -132,6 +147,7 @@ function buildMenu() {
       label: "Sofer 2.0",
       submenu: [
         { label: "Settings…", click: createSettingsWindow },
+        { label: "Show Log File", click: () => shell.showItemInFolder(LOG_PATH) },
         { type: "separator" },
         { role: "quit" },
       ],
