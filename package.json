@@ -45,6 +45,7 @@
       "!data/**/*"
     ],
     "asarUnpack": ["node_modules/better-sqlite3/**/*"],
+    "afterSign": "build/afterSign.js",
     "mac": {
       "target": "dmg",
       "icon": "build/icon.icns",
