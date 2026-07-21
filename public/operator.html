@@ -37,11 +37,36 @@
     align-items: center;
     gap: 16px;
     padding: 12px 20px;
-    background: var(--panel);
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(115deg, #050b16 0%, #0a1930 45%, #123258 100%);
     border-bottom: 1px solid var(--border);
   }
-  header h1 { font-size: 16px; margin: 0; font-weight: 600; flex: 1; }
-  .app-logo { height: 26px; width: 26px; border-radius: 6px; background: white; padding: 2px; }
+  header::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 0%, transparent 38%,
+      rgba(111, 208, 255, 0.16) 48%,
+      rgba(111, 208, 255, 0.05) 58%,
+      transparent 68%, transparent 100%
+    );
+    pointer-events: none;
+  }
+  header > * { position: relative; z-index: 1; }
+  header h1 {
+    font-size: 16px; margin: 0; font-weight: 600; flex: 1;
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .brand {
+    font-size: 18px; font-weight: 800; letter-spacing: 0.01em;
+    background: linear-gradient(90deg, #7fd6ff, #4f8cff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .brand-sub { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .app-logo { height: 28px; width: 28px; border-radius: 7px; background: white; padding: 2px; flex-shrink: 0; }
   .status-dot {
     width: 10px; height: 10px; border-radius: 50%;
     background: var(--bad); display: inline-block; margin-right: 6px;
@@ -393,7 +418,7 @@
   <header>
     <span class="status-dot" id="statusDot"></span>
     <img class="app-logo" src="/icons/icon-192.png" alt="Sofer 2.0" />
-    <h1>Sofer 2.0 — Operator Console</h1>
+    <h1><span class="brand">Sofer 2.0</span><span class="brand-sub">— Operator Console</span></h1>
     <span class="stt-mode-label" id="sttModeLabel" style="display:none"></span>
     <div class="mode-toggle" role="group" aria-label="Approval mode">
       <button type="button" class="mode-btn active" id="modeManualBtn" title="Suggestions wait for your Approve click">Manual</button>
