@@ -5,7 +5,7 @@
 <title>Operator Console — Sofer 2.0</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="manifest" href="/manifest-operator.json" />
-<meta name="theme-color" content="#4f8cff" />
+<meta name="theme-color" content="#1e88e5" />
 <link rel="icon" href="/icons/icon-192.png" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -17,7 +17,11 @@
     --panel-2: #1f2330;
     --text: #e8eaed;
     --muted: #8a8f9a;
-    --accent: #4f8cff;
+    --accent: #1e88e5;
+    --accent-2: #7fd8ff;
+    --accent-3: #0f4c9c;
+    --accent-gradient: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 55%, var(--accent-3) 100%);
+    --accent-glow: 0 0 0 1px rgba(127, 216, 255, 0.18), 0 10px 26px -8px rgba(21, 101, 192, 0.6);
     --good: #2ecc71;
     --bad: #e74c3c;
     --border: #2a2f3a;
@@ -73,7 +77,12 @@
   }
   button:hover { opacity: 0.85; }
   button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary {
+    background: var(--accent-gradient); color: white; box-shadow: var(--accent-glow);
+    transition: filter 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+  }
+  .btn-primary:hover { opacity: 1; filter: brightness(1.1); transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(0); filter: brightness(0.98); }
   .btn-danger { background: var(--bad); color: white; }
   .btn-neutral { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
   .mode-toggle {
@@ -85,7 +94,7 @@
     padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s;
   }
   .mode-btn:hover { opacity: 1; color: var(--text); }
-  .mode-btn.active { background: var(--accent); color: white; }
+  .mode-btn.active { background: var(--accent-gradient); color: white; }
   main {
     flex: 1;
     display: grid;
@@ -218,7 +227,7 @@
     width: 30px; height: 30px; padding: 0; font-size: 14px; line-height: 1;
     background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 6px;
   }
-  .fmt-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .fmt-btn.active { background: var(--accent-gradient); border-color: var(--accent); color: white; }
   #fmtSize {
     background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
     border-radius: 6px; padding: 0 8px; height: 30px; font: inherit; font-size: 12px;
@@ -279,7 +288,7 @@
     color: var(--text); padding: 6px 10px; font-size: 12px; cursor: pointer;
   }
   .obs-scene-btn:hover { border-color: var(--accent); }
-  .obs-scene-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .obs-scene-btn.active { background: var(--accent-gradient); border-color: var(--accent); color: white; }
   .obs-bg-toggle { display: block; width: 100%; margin-bottom: 8px; text-align: center; }
   #background-bar {
     display: flex; align-items: center; gap: 10px; padding: 10px 20px;
@@ -293,7 +302,7 @@
     position: relative; overflow: hidden;
   }
   .swatch:hover { opacity: 0.85; }
-  .swatch.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.35); }
+  .swatch.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(30, 136, 229, 0.4); }
   .swatch video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
   #background-bar .spacer { flex: 1; }
   #background-bar .bg-divider { width: 1px; align-self: stretch; background: var(--border); margin: 0 2px; }
@@ -309,7 +318,7 @@
     border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; font-weight: 600;
   }
   .media-tab:hover { color: var(--text); }
-  .media-tab.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .media-tab.active { background: var(--accent-gradient); border-color: var(--accent); color: white; }
   .media-toolbar { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
   .media-search {
     flex: 1; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
@@ -363,7 +372,7 @@
     cursor: pointer; border: 1px solid var(--border); background: var(--panel-2); min-width: 0;
   }
   .song-section-project:hover { border-color: var(--accent); }
-  .song-section-item.live .song-section-project { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.25); }
+  .song-section-item.live .song-section-project { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(30, 136, 229, 0.3); }
   .song-section-add {
     flex-shrink: 0; width: 28px; border-radius: 8px; background: var(--panel-2);
     border: 1px solid var(--border); color: var(--text); cursor: pointer; font-size: 14px;
@@ -406,7 +415,7 @@
     display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px;
     border: 1px solid var(--border); background: var(--panel-2); margin-bottom: 6px;
   }
-  .playlist-item.current { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.25); }
+  .playlist-item.current { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(30, 136, 229, 0.3); }
   .playlist-item-main {
     flex: 1; min-width: 0; text-align: left; background: none; border: none; color: var(--text);
     cursor: pointer; padding: 0; display: block;
