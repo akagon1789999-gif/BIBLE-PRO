@@ -18,6 +18,7 @@ const {
   fetchVerseText,
   fetchVerseRange,
   fetchChapter,
+  searchVerses,
   listEnglishTranslations,
   POPULAR_TRANSLATION_CODES,
 } = require("./lib/bollsClient");
@@ -154,6 +155,18 @@ app.get("/api/bible/chapter/:bookId/:chapter", async (req, res) => {
     res.json({ bookId: book.id, bookName: book.name, chapter, translation, verses });
   } catch (err) {
     res.status(502).json({ error: `Could not load chapter: ${err.message}` });
+  }
+});
+
+app.get("/api/bible/search", async (req, res) => {
+  const query = (req.query.query || "").trim();
+  if (!query) return res.status(400).json({ error: "query is required." });
+  const translation = req.query.translation || TRANSLATION;
+  try {
+    const results = await searchVerses(query, translation, 25);
+    res.json({ results });
+  } catch (err) {
+    res.status(502).json({ error: `Bible search failed: ${err.message}` });
   }
 });
 

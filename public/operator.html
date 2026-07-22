@@ -80,6 +80,16 @@
     transform: scale(calc(1 + var(--mic-level, 0) * 0.35));
     transition: box-shadow 0.08s ease-out, transform 0.08s ease-out;
   }
+  .mic-meter {
+    display: flex; align-items: flex-end; gap: 2px; height: 22px; padding: 0 2px;
+  }
+  .mic-meter-bar {
+    width: 4px; height: 100%; border-radius: 1px; background: var(--panel-2);
+    transition: background-color 0.05s linear;
+  }
+  .mic-meter-bar.on.zone-low { background: var(--good); }
+  .mic-meter-bar.on.zone-mid { background: #f5c542; }
+  .mic-meter-bar.on.zone-high { background: var(--bad); }
   button {
     font: inherit; border: none; border-radius: 8px; padding: 8px 16px;
     cursor: pointer; font-weight: 600; transition: opacity 0.15s;
@@ -252,6 +262,11 @@
   .custom-text-form .actions button { flex: 1; }
   .empty { color: var(--muted); padding: 20px; text-align: center; font-size: 14px; }
   .translation-select-mini { width: auto; margin-bottom: 0; max-width: 150px; }
+  .bible-search-bar { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .bible-search-ref {
+    color: var(--accent); font-weight: 700; font-size: 11px; flex-shrink: 0;
+    width: auto; white-space: nowrap; padding-top: 3px;
+  }
   .bible-breadcrumb {
     display: flex; align-items: center; gap: 8px; padding: 8px 16px;
     border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted);
@@ -485,6 +500,8 @@
       <button type="button" class="mode-btn active" id="modeManualBtn" title="Suggestions wait for your Approve click">Manual</button>
       <button type="button" class="mode-btn" id="modeAutoBtn" title="Detected verses are shown immediately, no approval needed">Auto</button>
     </div>
+    <button class="btn-neutral" id="micCheckBtn" title="Test your microphone without starting live transcription">🎙 Mic Check</button>
+    <div id="micMeter" class="mic-meter" style="display:none"></div>
     <button class="btn-primary" id="listenBtn">Start Listening</button>
     <button class="btn-danger" id="clearBtn">Clear Display</button>
     <button class="btn-neutral" id="installBtn" style="display:none">📲 Install App</button>
@@ -558,6 +575,9 @@
         <span>Bible Browser</span>
         <select id="bibleTranslationSelect" class="translation-select translation-select-mini"></select>
         <button class="panel-collapse-btn" data-collapse-toggle title="Collapse this panel">‹</button>
+      </div>
+      <div class="bible-search-bar">
+        <input type="text" id="bibleSearchInput" class="media-search" placeholder="Search scripture…" />
       </div>
       <div class="bible-breadcrumb">
         <button class="btn-neutral bible-back" id="bibleBackBtn" style="display:none">‹ Back</button>

@@ -2,6 +2,8 @@
   const statusDot = document.getElementById("statusDot");
   const listenBtn = document.getElementById("listenBtn");
   const clearBtn = document.getElementById("clearBtn");
+  const micCheckBtn = document.getElementById("micCheckBtn");
+  const micMeter = document.getElementById("micMeter");
   const transcriptEl = document.getElementById("transcript");
   const suggestionsEl = document.getElementById("suggestions");
   const previewFrame = document.getElementById("preview-frame");
@@ -29,6 +31,7 @@
   const installBtn = document.getElementById("installBtn");
   const sttModeLabel = document.getElementById("sttModeLabel");
   const bibleTranslationSelect = document.getElementById("bibleTranslationSelect");
+  const bibleSearchInput = document.getElementById("bibleSearchInput");
   const bibleBackBtn = document.getElementById("bibleBackBtn");
   const bibleBreadcrumbLabel = document.getElementById("bibleBreadcrumbLabel");
   const bibleBrowserBody = document.getElementById("bibleBrowserBody");
@@ -53,9 +56,9 @@
   let mediaStream = null;
   let mediaRecorder = null;
   let listening = false;
-  let micLevelAudioContext = null;
-  let micLevelAnalyser = null;
-  let micLevelRAF = null;
+  let micLevelMonitor = null;
+  let micCheckStream = null;
+  let micCheckMonitor = null;
   let finalTranscriptLog = [];
   let availableTranslations = [];
   let popularTranslationCodes = [];
@@ -205,49 +208,115 @@
   const RECORDER_MIME = "audio/webm;codecs=opus";
   const CHUNK_MS = 250;
 
-  // Reads the mic's actual live input level (via an AnalyserNode on the
-  // same stream MediaRecorder is already using — Web Audio API supports
-  // multiple consumers of one MediaStream) and drives the status dot's
-  // --mic-level CSS variable each frame, so the dot visibly pulses with
-  // real sound as proof the mic is actually capturing audio.
-  function startMicLevelMeter(stream) {
+  // Reads a MediaStream's actual live input level via an AnalyserNode and
+  // calls onLevel(0-1) every animation frame — shared by the status dot's
+  // live-listening glow and the standalone Mic Check meter below, since
+  // both are the same "how loud is the mic right now" measurement, just
+  // driving different visuals. Web Audio API supports multiple consumers
+  // of one MediaStream, so this never interferes with MediaRecorder.
+  function createMicLevelMonitor(stream, onLevel) {
     const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextCtor) return;
-    micLevelAudioContext = new AudioContextCtor();
-    const source = micLevelAudioContext.createMediaStreamSource(stream);
-    micLevelAnalyser = micLevelAudioContext.createAnalyser();
-    micLevelAnalyser.fftSize = 256;
-    micLevelAnalyser.smoothingTimeConstant = 0.6;
-    source.connect(micLevelAnalyser);
+    if (!AudioContextCtor) return null;
+    const audioContext = new AudioContextCtor();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.6;
+    source.connect(analyser);
 
-    const data = new Uint8Array(micLevelAnalyser.frequencyBinCount);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    let raf = null;
     const tick = () => {
-      micLevelAnalyser.getByteFrequencyData(data);
+      analyser.getByteFrequencyData(data);
       let sum = 0;
       for (let i = 0; i < data.length; i++) sum += data[i];
       const level = Math.min(1, sum / data.length / 90); // 90 tuned for normal speaking volume
-      statusDot.style.setProperty("--mic-level", level.toFixed(3));
-      micLevelRAF = requestAnimationFrame(tick);
+      onLevel(level);
+      raf = requestAnimationFrame(tick);
     };
     tick();
+
+    return {
+      stop() {
+        if (raf) cancelAnimationFrame(raf);
+        audioContext.close().catch(() => {});
+      },
+    };
+  }
+
+  function startMicLevelMeter(stream) {
+    micLevelMonitor = createMicLevelMonitor(stream, (level) => {
+      statusDot.style.setProperty("--mic-level", level.toFixed(3));
+    });
   }
 
   function stopMicLevelMeter() {
-    if (micLevelRAF) cancelAnimationFrame(micLevelRAF);
-    micLevelRAF = null;
-    micLevelAnalyser = null;
-    if (micLevelAudioContext) {
-      micLevelAudioContext.close().catch(() => {});
-      micLevelAudioContext = null;
-    }
+    if (micLevelMonitor) micLevelMonitor.stop();
+    micLevelMonitor = null;
     statusDot.style.removeProperty("--mic-level");
   }
+
+  // --- Mic Check: lets you confirm the mic is actually picking up sound
+  // before a service starts, without opening a Deepgram connection or
+  // touching the real Start Listening state at all — its own getUserMedia
+  // stream, torn down independently.
+  const MIC_METER_BARS = 12;
+  for (let i = 0; i < MIC_METER_BARS; i++) {
+    const bar = document.createElement("div");
+    bar.className = "mic-meter-bar";
+    micMeter.appendChild(bar);
+  }
+  const micMeterBarEls = Array.from(micMeter.children);
+
+  function renderMicMeter(level) {
+    const litCount = Math.round(level * MIC_METER_BARS);
+    micMeterBarEls.forEach((bar, i) => {
+      const on = i < litCount;
+      const zone = i < 7 ? "zone-low" : i < 10 ? "zone-mid" : "zone-high";
+      bar.classList.toggle("on", on);
+      bar.classList.toggle("zone-low", on && zone === "zone-low");
+      bar.classList.toggle("zone-mid", on && zone === "zone-mid");
+      bar.classList.toggle("zone-high", on && zone === "zone-high");
+    });
+  }
+
+  async function startMicCheck() {
+    try {
+      micCheckStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      alert(
+        err.name === "NotFoundError" || err.name === "DevicesNotFoundError"
+          ? "No microphone was found. Check that one is connected and try again."
+          : "Microphone access was denied. Allow microphone access for this page, then try Mic Check again."
+      );
+      return;
+    }
+    micCheckBtn.textContent = "Stop Mic Check";
+    micMeter.style.display = "flex";
+    micCheckMonitor = createMicLevelMonitor(micCheckStream, renderMicMeter);
+  }
+
+  function stopMicCheck() {
+    if (micCheckMonitor) micCheckMonitor.stop();
+    micCheckMonitor = null;
+    if (micCheckStream) micCheckStream.getTracks().forEach((t) => t.stop());
+    micCheckStream = null;
+    micCheckBtn.textContent = "🎙 Mic Check";
+    micMeter.style.display = "none";
+    renderMicMeter(0);
+  }
+
+  micCheckBtn.onclick = () => {
+    if (micCheckStream) stopMicCheck();
+    else startMicCheck();
+  };
 
   async function startListening() {
     if (!navigator.mediaDevices || !window.MediaRecorder) {
       alert("This browser doesn't support microphone capture. Please use Google Chrome.");
       return;
     }
+    if (micCheckStream) stopMicCheck(); // don't hold two separate mic streams at once
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
@@ -1386,13 +1455,80 @@
     });
   }
 
+  async function runBibleSearch(query) {
+    bibleView = "search";
+    bibleBackBtn.style.display = "inline-block";
+    bibleBreadcrumbLabel.textContent = `Search: "${query}"`;
+    bibleBrowserBody.innerHTML = '<div class="empty">Searching…</div>';
+    try {
+      const translation = bibleTranslationSelect.value || "KJV";
+      const res = await fetch(
+        `/api/bible/search?query=${encodeURIComponent(query)}&translation=${encodeURIComponent(translation)}`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Search failed");
+      renderBibleSearchResults(data.results || []);
+    } catch (err) {
+      console.error("Bible search failed:", err);
+      bibleBrowserBody.innerHTML = '<div class="empty">Search failed. Try again.</div>';
+    }
+  }
+
+  function renderBibleSearchResults(results) {
+    if (!results.length) {
+      bibleBrowserBody.innerHTML = '<div class="empty">No matching verses found.</div>';
+      return;
+    }
+    bibleBrowserBody.innerHTML = results
+      .map((r) => {
+        const book = bibleBooks.find((b) => b.id === r.bookId);
+        const ref = book ? `${book.name} ${r.chapter}:${r.verse}` : `${r.chapter}:${r.verse}`;
+        return `
+        <div class="bible-verse-row" data-book-id="${r.bookId}" data-chapter="${r.chapter}" data-verse="${r.verse}">
+          <span class="bible-verse-num bible-search-ref">${escapeHtml(ref)}</span>
+          <span class="bible-verse-text">${escapeHtml(r.text)}</span>
+          <button class="bible-verse-add" title="Add to Playlist">+</button>
+          <button class="bible-verse-project">Project</button>
+        </div>`;
+      })
+      .join("");
+    bibleBrowserBody.querySelectorAll(".bible-verse-row").forEach((row) => {
+      const bookId = parseInt(row.dataset.bookId, 10);
+      const chapter = parseInt(row.dataset.chapter, 10);
+      const verse = parseInt(row.dataset.verse, 10);
+      const book = bibleBooks.find((b) => b.id === bookId);
+      const bookName = book ? book.name : "";
+      row.querySelector(".bible-verse-project").onclick = () => {
+        wsSend({ type: "manual", bookId, bookName, chapter, verse });
+      };
+      row.querySelector(".bible-verse-add").onclick = () => {
+        addToPlaylist("scripture", `${bookName} ${chapter}:${verse}`, { bookId, bookName, chapter, verse });
+      };
+    });
+  }
+
+  let bibleSearchDebounce;
+  bibleSearchInput.addEventListener("input", () => {
+    clearTimeout(bibleSearchDebounce);
+    const query = bibleSearchInput.value.trim();
+    if (!query) {
+      renderBibleBooksList();
+      return;
+    }
+    bibleSearchDebounce = setTimeout(() => runBibleSearch(query), 350);
+  });
+
   bibleBackBtn.onclick = () => {
-    if (bibleView === "verses") renderBibleChapterGrid();
+    if (bibleView === "search") {
+      bibleSearchInput.value = "";
+      renderBibleBooksList();
+    } else if (bibleView === "verses") renderBibleChapterGrid();
     else if (bibleView === "chapters") renderBibleBooksList();
   };
 
   bibleTranslationSelect.onchange = () => {
     if (bibleView === "verses") loadBibleVerses();
+    else if (bibleView === "search" && bibleSearchInput.value.trim()) runBibleSearch(bibleSearchInput.value.trim());
   };
 
   // --- OBS Control: connection/recording status + click-to-switch scenes.
