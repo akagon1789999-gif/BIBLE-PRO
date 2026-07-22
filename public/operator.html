@@ -70,7 +70,16 @@
     width: 10px; height: 10px; border-radius: 50%;
     background: var(--bad); display: inline-block; margin-right: 6px;
   }
-  .status-dot.live { background: var(--good); box-shadow: 0 0 8px var(--good); }
+  /* --mic-level (0-1) is updated live from the actual mic input via an
+     AnalyserNode — the dot visibly brightens/grows with real sound, not
+     just a static "connected" indicator, so it doubles as proof audio is
+     actually being captured. */
+  .status-dot.live {
+    background: var(--good);
+    box-shadow: 0 0 calc(6px + var(--mic-level, 0) * 18px) calc(1px + var(--mic-level, 0) * 5px) var(--good);
+    transform: scale(calc(1 + var(--mic-level, 0) * 0.35));
+    transition: box-shadow 0.08s ease-out, transform 0.08s ease-out;
+  }
   button {
     font: inherit; border: none; border-radius: 8px; padding: 8px 16px;
     cursor: pointer; font-weight: 600; transition: opacity 0.15s;

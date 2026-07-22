@@ -53,6 +53,9 @@
   let mediaStream = null;
   let mediaRecorder = null;
   let listening = false;
+  let micLevelAudioContext = null;
+  let micLevelAnalyser = null;
+  let micLevelRAF = null;
   let finalTranscriptLog = [];
   let availableTranslations = [];
   let popularTranslationCodes = [];
@@ -202,6 +205,44 @@
   const RECORDER_MIME = "audio/webm;codecs=opus";
   const CHUNK_MS = 250;
 
+  // Reads the mic's actual live input level (via an AnalyserNode on the
+  // same stream MediaRecorder is already using — Web Audio API supports
+  // multiple consumers of one MediaStream) and drives the status dot's
+  // --mic-level CSS variable each frame, so the dot visibly pulses with
+  // real sound as proof the mic is actually capturing audio.
+  function startMicLevelMeter(stream) {
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return;
+    micLevelAudioContext = new AudioContextCtor();
+    const source = micLevelAudioContext.createMediaStreamSource(stream);
+    micLevelAnalyser = micLevelAudioContext.createAnalyser();
+    micLevelAnalyser.fftSize = 256;
+    micLevelAnalyser.smoothingTimeConstant = 0.6;
+    source.connect(micLevelAnalyser);
+
+    const data = new Uint8Array(micLevelAnalyser.frequencyBinCount);
+    const tick = () => {
+      micLevelAnalyser.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      const level = Math.min(1, sum / data.length / 90); // 90 tuned for normal speaking volume
+      statusDot.style.setProperty("--mic-level", level.toFixed(3));
+      micLevelRAF = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  function stopMicLevelMeter() {
+    if (micLevelRAF) cancelAnimationFrame(micLevelRAF);
+    micLevelRAF = null;
+    micLevelAnalyser = null;
+    if (micLevelAudioContext) {
+      micLevelAudioContext.close().catch(() => {});
+      micLevelAudioContext = null;
+    }
+    statusDot.style.removeProperty("--mic-level");
+  }
+
   async function startListening() {
     if (!navigator.mediaDevices || !window.MediaRecorder) {
       alert("This browser doesn't support microphone capture. Please use Google Chrome.");
@@ -229,6 +270,7 @@
     };
     mediaRecorder.onerror = (e) => console.error("MediaRecorder error:", e.error);
     mediaRecorder.start(CHUNK_MS);
+    startMicLevelMeter(mediaStream);
 
     listening = true;
     statusDot.classList.add("live");
@@ -240,6 +282,7 @@
     if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
     mediaRecorder = null;
     mediaStream = null;
+    stopMicLevelMeter();
     wsSend({ type: "stop-audio" });
     stopOfflineCapture();
     sttModeLabel.style.display = "none";
